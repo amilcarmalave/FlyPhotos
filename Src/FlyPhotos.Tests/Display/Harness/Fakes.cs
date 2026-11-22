@@ -170,10 +170,11 @@ internal sealed class FakeDecoder : IPhotoDecoder
     public async Task<HqDisplayItem?> LoadHq(Photo photo, bool allowLarge, CancellationToken ct) =>
         (HqDisplayItem?)await Begin(photo, DecodeKind.Hq, allowLarge, ct).ConfigureAwait(false);
 
-    public async Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose)
+    public async Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose,
+        CancellationToken ct = default)
     {
         var kind = purpose == Purpose.PreviewHeavy ? DecodeKind.PreviewHeavy : DecodeKind.PreviewLight;
-        return ((PreviewDisplayItem, Thumbnail?)?)await Begin(photo, kind, false, default).ConfigureAwait(false);
+        return ((PreviewDisplayItem, Thumbnail?)?)await Begin(photo, kind, false, ct).ConfigureAwait(false);
     }
 
     public async Task PutPreviewInDiskCache(string path, PreviewDisplayItem preview, int width, int height)

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using FlyPhotos.Core.Model;
 using FlyPhotos.Display.ImageReading;
 using FlyPhotos.Display.State;
+using FlyPhotos.Infra.Configuration;
 using FlyPhotos.Infra.Interop;
 using FlyPhotos.Tests.Display.Harness;
 using Microsoft.Graphics.Canvas;
@@ -18,32 +19,35 @@ public sealed class VideoFrameReaderTests
 {
     private static readonly string Fixture = Path.Combine(Path.GetTempPath(), "fly_video_fixture.mp4");
     private static readonly string Dir = Path.Combine(Path.GetTempPath(), "FlyPhotosVideoTests", Guid.NewGuid().ToString("N"));
+    private static readonly string AudioOnly = Path.Combine(Dir, "audio_only.mp4");
     private static readonly CanvasRenderTarget Ctrl = new(TestGpu.Device, 1, 1, 96);
 
     [ClassInitialize]
-    public static void EncodeFixture(TestContext _)
+    public static void EncodeFixtures(TestContext _)
     {
         Directory.CreateDirectory(Dir);
         Assert.IsTrue(MpvHandle.TryLoad(), "libmpv-2.dll is not next to the tests");
         File.Delete(Fixture);
-        using (var mpv = MpvHandle.Create(new Dictionary<string, string>
-               {
-                   ["o"] = Fixture,
-                   ["ovc"] = "mpeg4",
-                   ["oac"] = "no",
-                   ["vo"] = "null",
-                   ["ao"] = "null",
-                   ["end"] = "2",
-               }))
+        Encode(Fixture, "av://lavfi:testsrc=duration=2:size=160x90:rate=10", ("ovc", "mpeg4"), ("oac", "no"));
+        // A 2 s tone in an MP4 with no video stream at all.
+        Encode(AudioOnly, "av://lavfi:sine=duration=2", ("oac", "aac"));
+    }
+
+    /// <summary>Encodes 2 s of <paramref name="source"/> into <paramref name="output"/> with libmpv's encoder.</summary>
+    private static void Encode(string output, string source, params (string Name, string Value)[] codecs)
+    {
+        var options = new Dictionary<string, string> { ["o"] = output, ["vo"] = "null", ["ao"] = "null", ["end"] = "2" };
+        foreach (var (name, value) in codecs) options[name] = value;
+        using (var mpv = MpvHandle.Create(options))
         {
             using var ended = new ManualResetEventSlim();
             mpv.EndFile += ended.Set;
             mpv.StartEventLoop();
-            mpv.Command("loadfile", "av://lavfi:testsrc=duration=2:size=160x90:rate=10");
-            Assert.IsTrue(ended.Wait(TimeSpan.FromSeconds(20)), "encoding the fixture never ended");
+            mpv.Command("loadfile", source);
+            Assert.IsTrue(ended.Wait(TimeSpan.FromSeconds(20)), $"encoding {output} never ended");
         }
         // The encoder finishes the file when the handle is destroyed.
-        Assert.IsTrue(new FileInfo(Fixture).Length > 1000, "the fixture was not written");
+        Assert.IsTrue(new FileInfo(output).Length > 1000, $"{output} was not written");
     }
 
     [ClassCleanup]
@@ -134,6 +138,67 @@ public sealed class VideoFrameReaderTests
 
         Assert.IsFalse(ok);
         Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(1), $"took {sw.Elapsed}");
+    }
+
+    [TestMethod]
+    public async Task Audio_only_file_fails_fast()
+    {
+        var sw = Stopwatch.StartNew();
+        var (ok, _) = await VideoFrameReader.GetHq(Ctrl, AudioOnly);
+
+        Assert.IsFalse(ok);
+        Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(3), $"took {sw.Elapsed}");
+    }
+
+    [TestMethod]
+    public async Task Cancelling_decodes_that_wait_for_a_slot_frees_them_at_once()
+    {
+        // The real pipeline below the prefetch cache: PhotoDecoder -> ImageReader -> VideoFrameReader, with both
+        // decode slots taken (two slow videos elsewhere).
+        AppConfig.Settings = new AppSettings();
+        var decoder = new PhotoDecoder(Ctrl);
+        var photo = new Photo(Fixture);
+        Assert.IsTrue(VideoFrameReader.Gate.Wait(0) && VideoFrameReader.Gate.Wait(0), "both slots free at the start");
+        try
+        {
+            using var cts = new CancellationTokenSource();
+            var preview = decoder.LoadPreview(photo, Purpose.PreviewLight, cts.Token);
+            var hq = decoder.LoadHq(photo, allowLarge: false, cts.Token);
+            await Task.Delay(200);
+            Assert.IsFalse(preview.IsCompleted || hq.IsCompleted, "they wait for a slot");
+
+            var sw = Stopwatch.StartNew();
+            await cts.CancelAsync();
+            var all = Task.WhenAll(preview, hq);
+            Assert.AreSame(all, await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(1))), "cancelling ends them");
+            Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(1), $"took {sw.Elapsed}");
+            Assert.IsNull(await preview, "a cancelled preview is nothing, not the error item");
+            Assert.IsNull(await hq, "a cancelled HQ is nothing, not the error screen");
+            Assert.IsNull(photo.Slots.Hq);
+        }
+        finally
+        {
+            VideoFrameReader.Gate.Release(2);
+            photo.Slots.Retire();
+        }
+        Assert.AreEqual(2, VideoFrameReader.Gate.CurrentCount, "no slot is kept by a cancelled decode");
+    }
+
+    [TestMethod]
+    public async Task Cancelling_a_running_decode_frees_its_slot_at_once()
+    {
+        for (int delayMs = 0; delayMs <= 40; delayMs += 10)
+        {
+            using var cts = new CancellationTokenSource();
+            var decode = VideoFrameReader.GetHq(Ctrl, Fixture, cts.Token);
+            await Task.Delay(delayMs);
+            var sw = Stopwatch.StartNew();
+            await cts.CancelAsync();
+            var (ok, item) = await decode;
+            Assert.IsTrue(sw.Elapsed < TimeSpan.FromSeconds(1), $"took {sw.Elapsed} after {delayMs} ms");
+            if (ok) item.Release(); // finished before the cancel landed
+            Assert.AreEqual(2, VideoFrameReader.Gate.CurrentCount, $"slot freed (cancelled after {delayMs} ms)");
+        }
     }
 
     [TestMethod]

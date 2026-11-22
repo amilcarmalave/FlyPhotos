@@ -352,6 +352,23 @@ public sealed class PrefetchCacheTests
     }
 
     [TestMethod]
+    public void Moving_away_cancels_the_tokens_of_the_preview_and_hq_jobs_left_behind()
+    {
+        // A video frame waits for one of the two mpv slots and polls mpv: only its token can end it early.
+        using var rig = new Rig(photos: 40, previewHalf: 2, hqHalf: 1, extension: ".mp4");
+        rig.Start(5);
+        var old = rig.Decoder.Pending.Where(d => d.Kind is DecodeKind.PreviewLight or DecodeKind.Hq).ToList();
+        Assert.IsTrue(old.Any(d => d.Kind == DecodeKind.PreviewLight) && old.Any(d => d.Kind == DecodeKind.Hq));
+        Assert.IsTrue(old.All(d => d.Ct.CanBeCanceled && !d.Ct.IsCancellationRequested), "each job has its own token");
+
+        rig.Move(30);
+
+        Assert.IsTrue(old.All(d => d.Ct.IsCancellationRequested), "abandoning a job cancels its decode");
+        foreach (var d in old) d.Complete(Reply.Nothing);
+        rig.Settle();
+    }
+
+    [TestMethod]
     public void A_cancelled_large_decode_stores_nothing_and_is_retried_when_landed_on_again()
     {
         using var rig = new Rig(photos: 40, previewHalf: 2, hqHalf: 1);

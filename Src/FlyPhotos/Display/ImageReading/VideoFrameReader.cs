@@ -33,8 +33,17 @@ internal static class VideoFrameReader
     /// <summary>Past this long a file with a picture but no known duration is read at its first frame.</summary>
     private static readonly TimeSpan DurationGrace = TimeSpan.FromSeconds(1);
 
-    /// <summary>Each decode runs a whole mpv player (demuxer, decoder threads): at most two at once.</summary>
-    private static readonly SemaphoreSlim Gate = new(2);
+    /// <summary>
+    /// A seek that never showed <c>seeking</c> nor moved <c>time-pos</c> is taken as landed on the frame already
+    /// shown after this long (a target in the first frame's span).
+    /// </summary>
+    private static readonly TimeSpan SeekGrace = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Each decode runs a whole mpv player (demuxer, decoder threads): at most two at once. Internal for the
+    /// cancellation tests, which hold its slots.
+    /// </summary>
+    internal static readonly SemaphoreSlim Gate = new(2);
 
     /// <summary>The headless player: no video or audio output, no audio decode, paused, exact seeks.</summary>
     private static readonly IReadOnlyDictionary<string, string> Options = new Dictionary<string, string>
@@ -162,25 +171,15 @@ internal static class VideoFrameReader
         while (true)
         {
             ThrowIfEnded();
+            // "auto" while opening; once open, the selected track or "no": audio only, nothing to show.
+            if (mpv.GetString("vid") == "no") throw new MpvException($"{path} has no video track", -1);
             duration = mpv.GetDouble("duration");
             if (mpv.GetDouble("video-params/w") is > 0 && (duration.HasValue || loading.Elapsed > DurationGrace)) break;
             Wait();
         }
 
         var target = FrameTime(duration ?? 0);
-        if (target > 0)
-        {
-            mpv.Command("seek", target.ToString(CultureInfo.InvariantCulture), "absolute+exact");
-            // Within a frame of the target: the frame on screen is the one the seek decoded.
-            var fps = mpv.GetDouble("container-fps") is double f && f > 0 ? f : 25;
-            var tolerance = 1.0 / fps + 0.001;
-            while (!(mpv.GetString("seeking") == "no" && mpv.GetDouble("time-pos") is { } t &&
-                     Math.Abs(t - target) <= tolerance))
-            {
-                ThrowIfEnded();
-                Wait();
-            }
-        }
+        if (target > 0) SeekAndSettle(target);
 
         // A frame may be decoded a moment before the output has it; retry until it does.
         while (true)
@@ -211,6 +210,29 @@ internal static class VideoFrameReader
         {
             ct.ThrowIfCancellationRequested();
             Thread.Sleep(PollInterval);
+        }
+
+        // An exact seek, done once mpv has started it (seen seeking, or time-pos moved; a seek the poll missed
+        // entirely within SeekGrace), is no longer seeking and time-pos holds still between two polls. Paused, the
+        // landed frame stays put, so this ends as soon as the seek does, whatever pts the frame has (VFR files land
+        // well off the target when frames are sparse). Never compares time-pos with the target.
+        void SeekAndSettle(double target)
+        {
+            var before = mpv.GetDouble("time-pos");
+            mpv.Command("seek", target.ToString(CultureInfo.InvariantCulture), "absolute+exact");
+            var sinceSeek = System.Diagnostics.Stopwatch.StartNew();
+            bool started = false;
+            double? last = null;
+            while (true)
+            {
+                ThrowIfEnded();
+                var seeking = mpv.GetString("seeking") != "no";
+                var now = mpv.GetDouble("time-pos");
+                started |= seeking || now != before || sinceSeek.Elapsed > SeekGrace;
+                if (started && !seeking && now.HasValue && now == last) return;
+                last = now;
+                Wait();
+            }
         }
     }
 

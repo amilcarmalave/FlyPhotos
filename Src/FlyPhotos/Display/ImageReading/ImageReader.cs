@@ -75,18 +75,21 @@ internal static class ImageReader
     /// <see cref="Purpose.Preview"/>: the whole chain. Background loading splits it in two passes:
     /// <see cref="Purpose.PreviewLight"/>, then <see cref="Purpose.PreviewHeavy"/> where few run at once.
     /// </param>
+    /// <param name="ct">The caller no longer wants it (navigation moved on). Only the video steps observe it.</param>
     /// <returns>
-    /// The preview, or the error screen when nothing could read the file. Null only for the light pass when
-    /// it found nothing but heavy steps remain: the caller runs the heavy pass next.
+    /// The preview, or the error screen when nothing could read the file. Null for the light pass when it found
+    /// nothing but heavy steps remain (the caller runs the heavy pass next), and when <paramref name="ct"/> stopped a
+    /// decode.
     /// </returns>
     public static async Task<PreviewDisplayItem?> GetPreview(ICanvasResourceCreatorWithDpi d2dCanvas, string path,
-        Purpose purpose = Purpose.Preview)
+        Purpose purpose = Purpose.Preview, CancellationToken ct = default)
     {
         if (!File.Exists(path)) return new PreviewDisplayItem(_indicators.FileNotFound, Origin.ErrorScreen);
         if (await FromDiskCache(d2dCanvas, path) is { } cached) return cached;
 
         using var file = new ImageFile(path);
-        if (await Decode(d2dCanvas, file, purpose) is PreviewDisplayItem item) return item;
+        if (await Decode(d2dCanvas, file, purpose, ct: ct) is PreviewDisplayItem item) return item;
+        if (ct.IsCancellationRequested) return null; // not a failure: nobody wants it any more
 
         // Asked after Decode, so a mislabelled file is judged by the format its header showed.
         if (purpose == Purpose.PreviewLight && ChainFor(file, Purpose.PreviewHeavy).Count > 0) return null;
@@ -109,7 +112,9 @@ internal static class ImageReader
     /// False when prefetching a neighbour: an oversized image's tiles could take gigabytes, so it is not
     /// decoded yet.
     /// </param>
-    /// <param name="ct">Cancels a large decode (the user moved on). Normal decodes don't observe it.</param>
+    /// <param name="ct">
+    /// Cancels a large decode or a video frame (the user moved on). Other decodes don't observe it.
+    /// </param>
     /// <returns>
     /// <c>Item</c>: the image, or the error screen when nothing could read it; null when an oversized image
     /// was not allowed here or its decode was cancelled, so the caller retries later. <c>Oversized</c>: the
@@ -123,10 +128,11 @@ internal static class ImageReader
         using var file = new ImageFile(path);
         if (!knownOversized)
         {
-            if (await Decode(d2dCanvas, file, Purpose.Hq, ct: CancellationToken.None) is HqDisplayItem hq) return (hq, false);
+            if (await Decode(d2dCanvas, file, Purpose.Hq, ct: ct) is HqDisplayItem hq) return (hq, false);
             // Preview metadata can't always tell up front (missing, or cached by an older build), so a failure
-            // may mean "too big". The size probe keeps a genuinely broken file on the error path.
-            if (!await IsOversized(d2dCanvas, file)) return (HqFailed(), false);
+            // may mean "too big". The size probe keeps a genuinely broken file on the error path. A cancelled video
+            // frame is no failure: nothing, so it is retried when wanted again.
+            if (!await IsOversized(d2dCanvas, file)) return (ct.IsCancellationRequested ? null : HqFailed(), false);
         }
 
         if (!allowLarge) return (null, true);
@@ -159,7 +165,10 @@ internal static class ImageReader
     /// read: a file whose content doesn't match its extension is decoded once more as what it really is.
     /// </summary>
     /// <param name="onAttempt">Called before each reader runs (the profiler counts and names them).</param>
-    /// <param name="ct">Cancels a <see cref="Purpose.Large"/> decode; surfaces as OperationCanceledException.</param>
+    /// <param name="ct">
+    /// Cancels a <see cref="Purpose.Large"/> decode, which surfaces as OperationCanceledException, and a video frame,
+    /// which then fails (null). The other steps don't observe it.
+    /// </param>
     internal static async Task<DisplayItem?> Decode(ICanvasResourceCreatorWithDpi ctrl, ImageFile file,
         Purpose purpose, Action<DecodeStep>? onAttempt = null, CancellationToken ct = default)
     {

@@ -115,7 +115,8 @@ internal sealed class PrefetchCache : IDisposable
         // The photo object it loads for. A photo removed (and its key forgotten) meanwhile no longer matches what
         // _getPhoto returns for the key, so Complete releases the result instead of storing it.
         public readonly Photo Photo = photo;
-        // Cancelled when the job is abandoned or the cache is disposed. Only the tiled large-image decode observes it.
+        // Cancelled when the job is abandoned or the cache is disposed. Only the tiled large-image decode and video
+        // frames (which would otherwise hold their decode slots, see VideoFrameReader) observe it.
         public readonly CancellationTokenSource Cts = new();
         // Cancelled, or made stale by a RAW setting change: its result is released, not stored. Prefetch thread only,
         // except Orphan, which runs after that thread has stopped.
@@ -387,7 +388,7 @@ internal sealed class PrefetchCache : IDisposable
     {
         if (job.Abandoned) return;
         job.Abandoned = true;
-        job.Cts.Cancel(); // only the large-image decode observes it; the others finish and are released
+        job.Cts.Cancel(); // the large-image decode and video frames observe it; the others finish and are released
     }
 
     // -------------------------------------------------------------------------
@@ -415,7 +416,7 @@ internal sealed class PrefetchCache : IDisposable
             {
                 case LoadKind.PreviewLight or LoadKind.PreviewHeavy:
                     var purpose = spec.Kind == LoadKind.PreviewHeavy ? Purpose.PreviewHeavy : Purpose.PreviewLight;
-                    if (await _decoder.LoadPreview(photo, purpose).ConfigureAwait(false) is { } loaded)
+                    if (await _decoder.LoadPreview(photo, purpose, job.Cts.Token).ConfigureAwait(false) is { } loaded)
                         (job.Preview, job.Thumbnail) = loaded;
                     break;
                 case LoadKind.Hq:

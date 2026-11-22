@@ -36,9 +36,10 @@ internal interface IPhotoDecoder
 
     /// <summary>
     /// The preview and its thumbnail. Null when the light pass found nothing and the preview needs a full-image decode
-    /// (<see cref="Purpose.PreviewHeavy"/>).
+    /// (<see cref="Purpose.PreviewHeavy"/>), or when <paramref name="ct"/> stopped it (only video frames observe it).
     /// </summary>
-    Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose);
+    Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose,
+        CancellationToken ct = default);
 
     /// <summary>Writes a preview to the disk cache under its own lease (it may be released meanwhile).</summary>
     Task PutPreviewInDiskCache(string path, PreviewDisplayItem preview, int width, int height);
@@ -101,10 +102,11 @@ internal sealed class PhotoDecoder : IPhotoDecoder
     });
 
     // Thread pool. An error preview gets no thumbnail: the strip shows its loading indicator for it.
-    public Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose) =>
+    public Task<(PreviewDisplayItem Preview, Thumbnail? Thumbnail)?> LoadPreview(Photo photo, Purpose purpose,
+        CancellationToken ct = default) =>
         Task.Run<(PreviewDisplayItem, Thumbnail?)?>(async () =>
         {
-            var preview = await ImageReader.GetPreview(_device, photo.FilePath, purpose);
+            var preview = await ImageReader.GetPreview(_device, photo.FilePath, purpose, ct);
             if (preview == null) return null;
             var thumbnail = preview.IsErrorOrUndefined() ? null : MakeThumbnail(preview);
             return (preview, thumbnail);
