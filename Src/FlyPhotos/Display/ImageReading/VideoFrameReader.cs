@@ -40,10 +40,15 @@ internal static class VideoFrameReader
     private static readonly TimeSpan SeekGrace = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
-    /// Each decode runs a whole mpv player (demuxer, decoder threads): at most two at once. Internal for the
-    /// cancellation tests, which hold its slots.
+    /// How many decodes may run at once: each runs a whole mpv player (demuxer, decoder threads). The prefetch
+    /// planner sizes its video lane to it (<c>JobLimits.Videos</c>).
     /// </summary>
-    internal static readonly SemaphoreSlim Gate = new(2);
+    internal const int MaxDecodes = 2;
+
+    /// <summary>
+    /// Lets <see cref="MaxDecodes"/> decodes run at once. Internal for the cancellation tests, which hold its slots.
+    /// </summary>
+    internal static readonly SemaphoreSlim Gate = new(MaxDecodes);
 
     /// <summary>The headless player: no video or audio output, no audio decode, paused, exact seeks.</summary>
     private static readonly IReadOnlyDictionary<string, string> Options = new Dictionary<string, string>

@@ -162,7 +162,7 @@ public sealed class VideoFrameReaderTests
         try
         {
             using var cts = new CancellationTokenSource();
-            var preview = decoder.LoadPreview(photo, Purpose.PreviewLight, cts.Token);
+            var preview = decoder.LoadPreview(photo, Purpose.PreviewHeavy, cts.Token);
             var hq = decoder.LoadHq(photo, allowLarge: false, cts.Token);
             await Task.Delay(200);
             Assert.IsFalse(preview.IsCompleted || hq.IsCompleted, "they wait for a slot");
@@ -219,11 +219,13 @@ public sealed class VideoFrameReaderTests
 
         // Even with every codec claiming .mkv, only the mpv steps are tried.
         CollectionAssert.AreEqual(new[] { D.VideoFrameResized }, Chain(Purpose.Preview));
-        CollectionAssert.AreEqual(new[] { D.VideoFrameResized }, Chain(Purpose.PreviewLight));
         CollectionAssert.AreEqual(new[] { D.VideoFrameResized }, Chain(Purpose.FirstPreview));
         CollectionAssert.AreEqual(new[] { D.VideoFrameHq }, Chain(Purpose.Hq));
         Assert.AreEqual(0, Chain(Purpose.Large).Count);
-        Assert.AreEqual(0, Chain(Purpose.PreviewHeavy).Count);
+        // A still runs a whole mpv player: heavy, so background loading gives it the heavy lane, never a light slot.
+        Assert.IsTrue(DecoderChains.IsHeavy(D.VideoFrameResized, ImageFormat.Video, ".mkv"));
+        Assert.AreEqual(0, Chain(Purpose.PreviewLight).Count);
+        CollectionAssert.AreEqual(new[] { D.VideoFrameResized }, Chain(Purpose.PreviewHeavy));
     }
 
     [TestMethod]

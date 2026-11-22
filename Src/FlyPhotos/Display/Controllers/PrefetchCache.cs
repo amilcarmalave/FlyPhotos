@@ -371,7 +371,8 @@ internal sealed class PrefetchCache : IDisposable
     // Prefetch thread. The planner's view of one key: what its slots hold, plus this cache's own notes about it.
     private SlotState SlotOf(int key)
     {
-        var slots = _getPhoto(key)?.Slots;
+        var photo = _getPhoto(key);
+        var slots = photo?.Slots;
         return new SlotState(
             HasPreview: slots?.Preview != null,
             HasHq: slots?.Hq != null,
@@ -379,7 +380,8 @@ internal sealed class PrefetchCache : IDisposable
             NeedsHeavy: _needsHeavy.Contains(key),
             NeedsDiskWrite: _needsDiskWrite.Contains(key),
             PreviewParked: _parked.Contains((key, LoadKind.PreviewLight)) || _parked.Contains((key, LoadKind.PreviewHeavy)),
-            HqParked: _parked.Contains((key, LoadKind.Hq)));
+            HqParked: _parked.Contains((key, LoadKind.Hq)),
+            Video: photo?.IsVideo == true);
     }
 
     // Prefetch thread. The job's result is no longer wanted: it is released when it returns. The job stays in _running

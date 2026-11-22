@@ -126,6 +126,31 @@ public sealed class PrefetchPlannerTests
     }
 
     [TestMethod]
+    public void VideoStillsTakeAtMostTheVideoSlotsOfTheHeavyLaneAndPhotosTheRest()
+    {
+        // 104-107 are videos, the rest photos needing a full decode; all wait for the heavy lane.
+        foreach (int key in Keys)
+            Have(key, new SlotState(HasPreview: false, HasHq: false, NeedsHeavy: true, Video: key is >= 104 and <= 107));
+        _running.Add(new RunningJob(105, LoadKind.PreviewHeavy, Video: true));
+        var plan = Plan(centre: 5, limits: Wide with { Heavy = 4, Videos = 2 });
+        // One video still runs, so one more (104) may start; 106 and 107 wait, and the photos behind them get the
+        // rest of the heavy lane (4 with the running one).
+        CollectionAssert.AreEqual(new[] { 104, 103, 102 }, Started(plan, LoadKind.PreviewHeavy));
+        Assert.AreEqual(1, plan.Start.Count(s => s.Kind == LoadKind.PreviewHeavy && s.Video));
+        Assert.IsTrue(plan.Start.Where(s => s.Kind == LoadKind.PreviewHeavy).All(s => s.Video == (s.Key is >= 104 and <= 107)),
+            "a started job says whether it is a video");
+    }
+
+    [TestMethod]
+    public void VideoSlotsMatchTheFrameReadersGateAndLeaveAPreviewSlotForPhotos()
+    {
+        Assert.AreEqual(2, JobLimits.ForCores(16).Videos);
+        Assert.AreEqual(2, JobLimits.ForCores(4).Videos);    // 3 preview slots
+        Assert.AreEqual(1, JobLimits.ForCores(3).Videos);    // 2 preview slots
+        Assert.AreEqual(1, JobLimits.ForCores(2).Videos);    // 1 slot: videos still load, one at a time
+    }
+
+    [TestMethod]
     public void DiskWritesWaitUntilNoLightPreviewIsWaiting()
     {
         Have(105, new SlotState(HasPreview: true, HasHq: true, NeedsDiskWrite: true));

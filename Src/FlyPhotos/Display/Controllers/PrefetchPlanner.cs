@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using FlyPhotos.Display.ImageReading;
 using FlyPhotos.Display.State;
 
 namespace FlyPhotos.Display.Controllers;
@@ -26,21 +27,29 @@ internal enum LoadKind
 /// <param name="NeedsDiskWrite">Its preview was decoded from the file and is not in the disk cache yet.</param>
 /// <param name="PreviewParked">A preview load failed; not retried until the photo is the window centre.</param>
 /// <param name="HqParked">An HQ load failed or was deferred (too large for a neighbour); as above.</param>
+/// <param name="Video">A video: its preview is a still frame from a whole mpv player (see <see cref="JobLimits.Videos"/>).</param>
 internal readonly record struct SlotState(bool HasPreview, bool HasHq, bool TiledHq = false, bool NeedsHeavy = false,
-    bool NeedsDiskWrite = false, bool PreviewParked = false, bool HqParked = false);
+    bool NeedsDiskWrite = false, bool PreviewParked = false, bool HqParked = false, bool Video = false);
 
 /// <summary>A job to start, or one the cache is running (or cancelled and not yet returned).</summary>
 /// <param name="Key">The photo's key in the photo list.</param>
 /// <param name="Kind">What the job loads or writes.</param>
 /// <param name="AllowLarge">An HQ job that may load a tiled large image: only the centre's.</param>
-internal readonly record struct RunningJob(int Key, LoadKind Kind, bool AllowLarge = false);
+/// <param name="Video">A heavy preview job for a video's still frame (counted against <see cref="JobLimits.Videos"/>).</param>
+internal readonly record struct RunningJob(int Key, LoadKind Kind, bool AllowLarge = false, bool Video = false);
 
 /// <summary>How many jobs of each kind may run at once. Previews (light and heavy together) share one budget.</summary>
 /// <param name="Previews">Preview jobs, light and heavy together.</param>
 /// <param name="Heavy">Of those, how many may be full-image decodes (the heavy lane).</param>
 /// <param name="Hq">HQ jobs. The centre's own HQ may start up to twice this (see <see cref="PrefetchPlanner"/>).</param>
 /// <param name="DiskWrites">Disk-cache writes.</param>
-internal readonly record struct JobLimits(int Previews, int Heavy, int Hq, int DiskWrites)
+/// <param name="Videos">
+/// Of the heavy previews, how many may be video still frames. Each runs a whole mpv player, and the frame reader
+/// lets only <see cref="VideoFrameReader.MaxDecodes"/> run at once: a job past that would sit on a preview slot
+/// waiting for its turn (up to the frame timeout), while photos' quick previews queue behind it.
+/// </param>
+internal readonly record struct JobLimits(int Previews, int Heavy, int Hq, int DiskWrites,
+    int Videos = VideoFrameReader.MaxDecodes)
 {
     /// <summary>
     /// Previews leave a core spare for the on-screen HQ decode, and stop at 8: a read benchmark (NVMe, SATA SSD,
@@ -49,8 +58,13 @@ internal readonly record struct JobLimits(int Previews, int Heavy, int Hq, int D
     /// HQ stops at 4 (the centre's own HQ may go up to twice that): the HQ window rarely needs more, and whole-file
     /// reads on a hard disk get slower in parallel.
     /// Disk-cache writes insert one at a time behind the cache's lock, so two keep one encoding while one inserts.
+    /// Video stills get the frame reader's slots, but always leave photos a preview slot when there are two or more.
     /// </summary>
-    public static JobLimits ForCores(int cores) => new(Math.Clamp(cores - 1, 1, 8), 4, Math.Min(cores, 4), 2);
+    public static JobLimits ForCores(int cores)
+    {
+        int previews = Math.Clamp(cores - 1, 1, 8);
+        return new(previews, 4, Math.Min(cores, 4), 2, Math.Clamp(previews - 1, 1, VideoFrameReader.MaxDecodes));
+    }
 }
 
 /// <summary>
@@ -106,7 +120,8 @@ internal sealed class PrefetchPlan
 ///     longer loading, so they don't slow the photo on screen. While HQ is held (a burst, a folder-switch quiet
 ///     period) no HQ starts at all.</item>
 ///   <item>Only the centre may load (and keep) a tiled large image; a neighbour's large HQ is deferred.</item>
-///   <item>Previews needing a full decode go to the heavy lane; it shares the preview budget.</item>
+///   <item>Previews needing a full decode go to the heavy lane; it shares the preview budget. A video's still is
+///     always heavy, and at most <see cref="JobLimits.Videos"/> of them run at once.</item>
 ///   <item>Disk-cache writes run only when no light preview is waiting, so they never slow the window filling.</item>
 ///   <item>A photo leaving a window is unloaded, and a job for it is cancelled.</item>
 /// </list>
@@ -138,7 +153,7 @@ internal static class PrefetchPlanner
 
         // --- What is running, and what to cancel ---
         // The counts include cancelled jobs whose decode has not returned: they still use a core and memory.
-        int previews = 0, heavy = 0, hqs = 0, diskWrites = 0;
+        int previews = 0, heavy = 0, videos = 0, hqs = 0, diskWrites = 0;
         for (int i = 0; i < running.Count; i++)
         {
             var job = running[i];
@@ -146,7 +161,11 @@ internal static class PrefetchPlanner
             switch (job.Kind)
             {
                 case LoadKind.PreviewLight: previews++; break;
-                case LoadKind.PreviewHeavy: previews++; heavy++; break;
+                case LoadKind.PreviewHeavy:
+                    previews++;
+                    heavy++;
+                    if (job.Video) videos++;
+                    break;
                 case LoadKind.Hq: hqs++; break;
                 case LoadKind.DiskWrite: diskWrites++; continue; // writes always finish
             }
@@ -220,9 +239,12 @@ internal static class PrefetchPlanner
                 // A full decode skipped for want of a place doesn't block the photos behind it: their light previews
                 // may still fit, so the loop goes on rather than stopping.
                 if (previews >= limits.Previews || heavy >= limits.Heavy) continue;
-                plan.Start.Add(new RunningJob(key, LoadKind.PreviewHeavy));
+                // A video's still past the frame reader's slots would hold a preview slot while it waits for one.
+                if (slot.Video && videos >= limits.Videos) continue;
+                plan.Start.Add(new RunningJob(key, LoadKind.PreviewHeavy, Video: slot.Video));
                 previews++;
                 heavy++;
+                if (slot.Video) videos++;
             }
             else
             {

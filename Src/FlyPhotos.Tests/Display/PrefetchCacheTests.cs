@@ -27,10 +27,12 @@ public sealed class PrefetchCacheTests
         private readonly bool _ownThread;
 
         public Rig(int photos = 11, int previewHalf = 5, int hqHalf = 2, JobLimits? limits = null,
-            Func<Decode, Reply>? script = null, string extension = ".jpg", bool ownThread = false)
+            Func<Decode, Reply>? script = null, string extension = ".jpg", bool ownThread = false,
+            Func<int, string>? extensionAt = null)
         {
             AppConfig.Settings = new AppSettings { CacheSizeOneSidePreviews = previewHalf, CacheSizeOneSideHqImages = hqHalf };
-            List.Initialize([.. Enumerable.Range(0, photos).Select(i => $@"c:\nowhere\p{i:D5}{extension}")]);
+            List.Initialize([.. Enumerable.Range(0, photos)
+                .Select(i => $@"c:\nowhere\p{i:D5}{extensionAt?.Invoke(i) ?? extension}")]);
             Decoder.Script = script ?? (_ => Reply.Pending);
             Limits = limits ?? new JobLimits(Previews: 3, Heavy: 2, Hq: 2, DiskWrites: 2);
             _ownThread = ownThread;
@@ -304,6 +306,39 @@ public sealed class PrefetchCacheTests
         Assert.AreEqual(1, Heavy(), "a parked neighbour is not retried when the centre moves elsewhere (FMEA 18)");
         rig.Move(6);
         Assert.AreEqual(2, Heavy(), "landing on it retries it");
+    }
+
+    [TestMethod]
+    public void Slow_video_stills_never_hold_up_photo_previews_and_at_most_two_run_at_once()
+    {
+        // A mixed folder on a 4-core machine (3 preview slots): ten photos and six videos packed round the centre.
+        // A video's light pass finds nothing (its still is a whole mpv player: heavy), and its heavy decode takes
+        // its time; every photo preview is quick.
+        static bool IsVideoAt(int i) => i is >= 6 and <= 11;
+        using var rig = new Rig(photos: 16, previewHalf: 8, hqHalf: 0, limits: JobLimits.ForCores(4),
+            extensionAt: i => IsVideoAt(i) ? ".mp4" : ".jpg",
+            script: d => d.Photo.IsVideo
+                ? d.Kind == DecodeKind.PreviewLight ? Reply.Nothing : Reply.Pending
+                : d.Kind == DecodeKind.Hq ? Reply.Pending : Reply.Item);
+        IReadOnlyList<Decode> VideoStills() => [.. rig.Pending(DecodeKind.PreviewHeavy).Where(d => d.Photo.IsVideo)];
+
+        rig.Start(8);
+
+        var photos = Enumerable.Range(0, 16).Where(i => !IsVideoAt(i)).ToList();
+        var missing = photos.Where(i => rig.At(i).Slots.Preview == null).ToList();
+        Assert.AreEqual(0, missing.Count, $"photo previews waiting behind video stills: {string.Join(", ", missing)}");
+        Assert.AreEqual(2, VideoStills().Count, "two video stills at once, the frame reader's gate");
+
+        // The stills finish one by one; the rest follow, never more than two at a time.
+        for (int i = 0; i < 20 && VideoStills().Count > 0; i++)
+        {
+            VideoStills()[0].Succeed();
+            rig.Settle();
+            Assert.IsTrue(VideoStills().Count <= 2, $"{VideoStills().Count} video stills at once");
+        }
+        Assert.IsTrue(Enumerable.Range(6, 6).All(i => rig.At(i).Slots.Preview != null), "every video got its still");
+        Assert.AreEqual(6, rig.Decoder.All.Count(d => d.Kind == DecodeKind.PreviewHeavy && d.Photo.IsVideo),
+            "one heavy decode per video");
     }
 
     [TestMethod]

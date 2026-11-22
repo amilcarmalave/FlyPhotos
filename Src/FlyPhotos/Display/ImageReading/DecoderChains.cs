@@ -111,6 +111,9 @@ internal static class DecoderChains
         DecodeStep.MagicScalerResized => format != ImageFormat.Jpeg,
         // The DNG codec returns the full-size image as the thumbnail of an iPhone ProRAW (297 MB at 48 MP).
         DecodeStep.WicEmbedded => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase),
+        // A video still runs a whole mpv player, up to seconds, and only two run at once (VideoFrameReader). In the
+        // heavy lane it can't take the preview slots photos' quick previews need (see JobLimits.Videos).
+        DecodeStep.VideoFrameResized => true,
         _ => false
     };
 
@@ -136,8 +139,8 @@ internal static class DecoderChains
         {
             // Video is mpv only: one still frame, at most 800 px for every preview (the first photo's too), at full
             // size for HQ. No other codec is tried (WIC and ImageMagick claim some containers and would fail slowly).
-            case (Purpose.Preview or Purpose.PreviewLight or Purpose.PreviewHeavy or Purpose.FirstPreview,
-                ImageFormat.Video):
+            // The step is heavy, so background loading's light pass has nothing to try and the heavy pass runs it.
+            case (Purpose.Preview or Purpose.FirstPreview, ImageFormat.Video):
                 Add(DecodeStep.VideoFrameResized);
                 break;
             // The frame is at most the video's size: never oversized.
