@@ -18,6 +18,7 @@ internal static partial class NativeMpv
 
     internal const int EventNone = 0;
     internal const int EventShutdown = 1;
+    internal const int EventStartFile = 6;
     internal const int EventEndFile = 7;
     internal const int EventPropertyChange = 22;
     internal const int FormatFlag = 3;
@@ -87,6 +88,8 @@ internal sealed class MpvHandle : IDisposable
     public event Action<string, double> DoublePropertyChanged;
     public event Action<string, bool> FlagPropertyChanged;
     public event Action EndFile;
+    /// <summary>A file starts loading (mpv's START_FILE), before any of its property changes.</summary>
+    public event Action StartFile;
 
     private MpvHandle(IntPtr ctx) => _ctx = ctx;
 
@@ -193,6 +196,9 @@ internal sealed class MpvHandle : IDisposable
                 {
                     case NativeMpv.EventShutdown:
                         return;
+                    case NativeMpv.EventStartFile:
+                        StartFile?.Invoke();
+                        break;
                     case NativeMpv.EventEndFile:
                         EndFile?.Invoke();
                         break;

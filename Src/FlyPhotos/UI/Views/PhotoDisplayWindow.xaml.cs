@@ -269,6 +269,7 @@ public sealed partial class PhotoDisplayWindow
         _windFullScreenManager.FullScreenToggled += WindFullScreenManager_FullScreenToggled;
 
         _video = new VideoPlaybackController(this, D2dCanvas, AppTitlebar, BottomPanel, DispatcherQueue);
+        _video.FocusReturned += Video_FocusReturned;
         AppWindow.Changed += AppWindow_Changed;
         MainLayout.PreviewKeyDown += HandlePreviewKeyDown;
         TrackFlyoutOverlay(ButtonMoreMenuFlyout);
@@ -609,13 +610,15 @@ public sealed partial class PhotoDisplayWindow
     }
 
     /// <summary>
-    /// Play/pause is taken on the way down, before the focused element sees the key: a focused button presses on
-    /// Space in its own key-down handling, ahead of the bubbling KeyDown above, so Space would click it (Next, say)
-    /// whatever that handler then marked. Handled here, the key never reaches the button, and KeyDown never runs it
-    /// a second time.
+    /// On a video, play/pause is taken on the way down, before the focused element sees the key: a focused button
+    /// presses on Space in its own key-down handling, ahead of the bubbling KeyDown above, so Space would click it
+    /// (Next, say) whatever that handler then marked. Handled here, the key never reaches the button, and KeyDown
+    /// never runs it a second time. On a photo, or with a text box focused, the key goes through as before.
     /// </summary>
     private void HandlePreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (!_photoController.CurrentPhotoIsVideo || e.OriginalSource is TextBox ||
+            (Content?.XamlRoot is { } root && FocusManager.GetFocusedElement(root) is TextBox)) return;
         if (_routes.TryGetValue(KeyChord.FromCurrentModifiers(e.Key), out var id) && id == CommandId.VideoPlayPause)
             RunKeyCommand(id, e);
     }
@@ -1292,7 +1295,11 @@ public sealed partial class PhotoDisplayWindow
             preExecuteFailed: () => _canvasController.Shrug(),
             anchorProvider:   () => BorderButtonPanel,
             filePathProvider: _photoController.GetFullPathCurrentFile,
-            execute:          _photoController.RenameCurrentPhoto,
+            execute:          async newFileName =>
+                              {
+                                  await ReleaseVideoFileAsync();
+                                  return await _photoController.RenameCurrentPhoto(newFileName);
+                              },
             flyoutCreated:    TrackFlyoutOverlay);
         return _fileActionRename.ExecuteAsync();
     }
@@ -1320,7 +1327,11 @@ public sealed partial class PhotoDisplayWindow
             preExecute: _photoController.CanDeleteCurrentPhoto,
             preExecuteFailed: () => { TxtZoom.Text = L.Get("LoadingHighQuality/Message");
                                       _inactivityFader.ReportActivity(); _canvasController.Shrug(); },
-            execute: _photoController.DeleteCurrentPhoto,
+            execute: async () =>
+            {
+                await ReleaseVideoFileAsync();
+                return await _photoController.DeleteCurrentPhoto();
+            },
             executeFailed: () => _canvasController.Shrug(),
             postExecute: () => Task.CompletedTask,                 // no-op today
             postExecuteLastItem: AnimatePhotoDisplayWindowClose,
@@ -1502,6 +1513,22 @@ public sealed partial class PhotoDisplayWindow
     #region Video
 
     private const double VideoSeekSeconds = 5;
+
+    // Before deleting or renaming the item on screen: mpv holds a playing (or paused) video open without
+    // FILE_SHARE_DELETE, so the player lets go of it first.
+    private async Task ReleaseVideoFileAsync()
+    {
+        if (_video.State.Path != null && _video.State.Path == _photoController.GetFullPathCurrentFile())
+            await _video.StopAndReleaseFileAsync();
+    }
+
+    // mpv's window moved Win32 focus off the XAML island and the controller handed it back: make sure a XAML element
+    // has it too, so the next key reaches the shortcuts.
+    private void Video_FocusReturned()
+    {
+        if (Content?.XamlRoot is { } root && FocusManager.GetFocusedElement(root) == null)
+            MainLayout.Focus(FocusState.Programmatic);
+    }
     private const int VideoVolumeStep = 5;
 
     // Space: starts the video on screen, or pauses/resumes it. Nothing on a photo, or while an overlay is open (the

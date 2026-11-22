@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using FlyPhotos.Infra.Configuration;
 using FlyPhotos.Infra.Interop;
 using Microsoft.UI.Dispatching;
@@ -13,6 +15,12 @@ namespace FlyPhotos.Display.Video;
 /// <summary>
 /// Plays one window's video in an mpv-rendered child HWND kept over the canvas, between the title bar and the bottom
 /// panel. A thin translation of <see cref="VideoPlaybackState"/> transitions into mpv commands and ShowWindow.
+/// <para>
+/// One mpv handle and one child window per window lifetime, both made on the first Play and destroyed only in
+/// <see cref="Dispose"/>: an item change unloads the file (<c>stop</c>) and hides the child, and the next video is a
+/// <c>loadfile … replace</c> on the same handle. Destroying embedded mpv instances while the window lives (more than
+/// one over its lifetime) made WinUI fail-fast in CoreMessaging when the window closed.
+/// </para>
 /// All public members are called on the UI thread; events are raised on it.
 /// </summary>
 internal sealed partial class VideoPlaybackController : IDisposable
@@ -30,8 +38,19 @@ internal sealed partial class VideoPlaybackController : IDisposable
     private XamlRoot _xamlRoot;
     private IntPtr _child;
     private MpvHandle _mpv;
-    // Bumped on every teardown; callbacks queued by an older player compare it and drop themselves.
-    private int _generation;
+    // Files mpv has started (START_FILE count), written on the mpv event thread. Each event is tagged with it, so a
+    // late event from an earlier file never applies to the current one: mpv delivers the old file's END_FILE and
+    // property changes before the next START_FILE.
+    private int _startedFiles;
+    // The START_FILE count the file now playing will have (bumped by every loadfile). UI thread.
+    private int _currentFile;
+    // Completed when mpv reports the end of a file; lets a caller wait until the file is closed. Any thread.
+    private TaskCompletionSource _fileClosed;
+    // The first position report of each file runs a keyboard-focus check: mpv creates its render window then.
+    private bool _focusCheckPending;
+    // While the player exists: mpv's render window lives on mpv's thread and can take Win32 focus at any moment (its
+    // input queue is attached to ours), so focus is checked a few times a second, not only at known points.
+    private DispatcherQueueTimer _focusTimer;
     private double _position;
     private double _duration;
     private bool _disposed;
@@ -43,6 +62,12 @@ internal sealed partial class VideoPlaybackController : IDisposable
 
     /// <summary>On the UI thread.</summary>
     public event Action<VideoPhase> PhaseChanged;
+
+    /// <summary>
+    /// On the UI thread: keyboard focus had fallen onto the top-level window or the player (mpv's window coming and
+    /// going moves Win32 focus) and was handed back to the XAML island; the host makes sure a XAML element has it.
+    /// </summary>
+    public event Action FocusReturned;
 
     public VideoPlaybackController(Window window, FrameworkElement canvas, FrameworkElement titleBar,
         FrameworkElement bottomPanel, DispatcherQueue ui)
@@ -69,7 +94,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
             switch (action)
             {
                 case PlayAction.Load:
-                    Start(path);
+                    Load(path);
                     break;
                 default:
                     Apply(action);
@@ -79,10 +104,11 @@ internal sealed partial class VideoPlaybackController : IDisposable
         catch (Exception ex)
         {
             Logger.Error(ex, "Could not play {0}", path);
-            Teardown();
+            Unload();
             State.Stop();
         }
         RaiseIfChanged(before);
+        PostFocusCheck();
     }
 
     public void TogglePause() => Transition(() => Apply(State.TogglePause()));
@@ -90,7 +116,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
     public void Seek(double deltaSeconds)
     {
         if (_mpv == null || State.Phase == VideoPhase.Idle) return;
-        RunSeek(() => _mpv.Command("seek", Format(deltaSeconds), "relative"));
+        RunSeek(() => _mpv.Command("seek", Format(deltaSeconds), "relative+exact"));
     }
 
     public void SeekTo(double seconds, bool exact)
@@ -122,30 +148,54 @@ internal sealed partial class VideoPlaybackController : IDisposable
         Apply(action);
     });
 
-    public void OverlayClosed() => Transition(() =>
+    public void OverlayClosed()
     {
-        State.OverlayClosed();
-        Reposition();
-        UpdateVisibility();
-    });
+        Transition(() =>
+        {
+            State.OverlayClosed();
+            Reposition();
+            UpdateVisibility();
+        });
+        PostFocusCheck();
+    }
 
     public void Minimized() => Transition(() => Apply(State.Minimized()));
 
-    /// <summary>Terminates mpv and destroys the child window. Called on every item change, so it never waits on
-    /// anything but <see cref="MpvHandle.Dispose"/>.</summary>
+    /// <summary>
+    /// Unloads the file and hides the player; the handle and child window stay for the next video. Called on every
+    /// item change, so it is cheap and does nothing when idle.
+    /// </summary>
     public void Stop()
     {
+        if (_disposed || State.Phase == VideoPhase.Idle) return;
         var before = State.Phase;
-        Teardown();
+        Unload();
         State.Stop();
         RaiseIfChanged(before);
+    }
+
+    /// <summary>
+    /// <see cref="Stop"/>, then waits (up to 2 s) until mpv has closed the file, so the caller can delete or rename
+    /// it: mpv opens files without FILE_SHARE_DELETE.
+    /// </summary>
+    public async Task StopAndReleaseFileAsync()
+    {
+        if (_disposed || State.Phase == VideoPhase.Idle) return;
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _fileClosed, closed);
+        Stop();
+        if (await Task.WhenAny(closed.Task, Task.Delay(TimeSpan.FromSeconds(2))) != closed.Task)
+            Logger.Warn("mpv did not report the file closed within 2 s");
     }
 
     public void Dispose()
     {
         if (_disposed) return;
+        var before = State.Phase;
+        State.Stop();
+        RaiseIfChanged(before);
         _disposed = true;
-        Stop();
+        Teardown();
         _canvas.SizeChanged -= OnLayoutChanged;
         _titleBar.SizeChanged -= OnLayoutChanged;
         _bottomPanel.SizeChanged -= OnLayoutChanged;
@@ -153,57 +203,105 @@ internal sealed partial class VideoPlaybackController : IDisposable
         _xamlRoot = null;
         PositionChanged = null;
         PhaseChanged = null;
+        FocusReturned = null;
     }
 
     // ---- player lifetime ----
 
-    private void Start(string path)
+    // The handle and the child window, made once.
+    private void EnsurePlayer()
     {
-        Teardown();
+        if (_mpv != null) return;
         if (!MpvHandle.TryLoad()) throw new InvalidOperationException("libmpv is not available");
 
         TrackXamlRoot();
-        // WS_DISABLED: the child never takes focus or clicks, so the keyboard stays with the WinUI window.
-        var style = Win32.WS_CHILD | Win32.WS_DISABLED | Win32.WS_CLIPSIBLINGS | (State.Hidden ? 0u : Win32.WS_VISIBLE);
+        // WS_DISABLED: the child never takes focus or clicks, so the keyboard stays with the WinUI window. Created
+        // hidden; Load shows it.
+        var style = Win32.WS_CHILD | Win32.WS_DISABLED | Win32.WS_CLIPSIBLINGS;
         _child = Win32.CreateWindowEx(0, "STATIC", "", style, 0, 0, 16, 16, _parent, IntPtr.Zero, IntPtr.Zero,
             IntPtr.Zero);
         if (_child == IntPtr.Zero)
             throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
-        Reposition();
 
-        var mpv = MpvHandle.Create(new Dictionary<string, string>
+        try
         {
-            ["wid"] = _child.ToInt64().ToString(CultureInfo.InvariantCulture),
-            ["input-default-bindings"] = "no",
-            ["input-vo-keyboard"] = "no",
-            ["input-cursor"] = "no",
-            ["osc"] = "no",
-            ["osd-level"] = "0",
-            ["hwdec"] = "auto-safe",
-            // At the end mpv keeps the last frame and pauses (no END_FILE); see OnPause.
-            ["keep-open"] = "yes",
-            ["volume"] = ClampVolume(AppConfig.Settings.VideoVolume).ToString(CultureInfo.InvariantCulture),
-            ["mute"] = AppConfig.Settings.VideoMuted ? "yes" : "no",
-        });
-        _mpv = mpv;
+            var mpv = MpvHandle.Create(new Dictionary<string, string>
+            {
+                ["wid"] = _child.ToInt64().ToString(CultureInfo.InvariantCulture),
+                ["input-default-bindings"] = "no",
+                ["input-vo-keyboard"] = "no",
+                ["input-cursor"] = "no",
+                ["osc"] = "no",
+                ["osd-level"] = "0",
+                ["hwdec"] = "auto-safe",
+                // At the end mpv keeps the last frame and pauses (no END_FILE); see OnPause.
+                ["keep-open"] = "yes",
+                // Keep mpv's render window between files, so it is made once rather than per video.
+                ["force-window"] = "yes",
+                ["idle"] = "yes",
+                ["volume"] = ClampVolume(AppConfig.Settings.VideoVolume).ToString(CultureInfo.InvariantCulture),
+                ["mute"] = AppConfig.Settings.VideoMuted ? "yes" : "no",
+            });
+            mpv.StartFile += () => Interlocked.Increment(ref _startedFiles);
+            mpv.DoublePropertyChanged += (name, value) => Post(() => OnDouble(name, value));
+            mpv.FlagPropertyChanged += (name, value) => Post(() => OnFlag(name, value));
+            mpv.EndFile += () =>
+            {
+                Interlocked.Exchange(ref _fileClosed, null)?.TrySetResult();
+                Post(OnEndFile);
+            };
+            mpv.Observe(ObserveTimePos, "time-pos");
+            mpv.Observe(ObserveDuration, "duration");
+            mpv.Observe(ObservePause, "pause");
+            mpv.StartEventLoop();
+            _mpv = mpv;
+            _focusTimer = _ui.CreateTimer();
+            _focusTimer.Interval = TimeSpan.FromMilliseconds(250);
+            _focusTimer.Tick += (_, _) => ReturnFocusIfLost();
+            _focusTimer.Start();
+        }
+        catch
+        {
+            Win32.DestroyWindow(_child);
+            _child = IntPtr.Zero;
+            throw;
+        }
+    }
+
+    private void Load(string path)
+    {
+        EnsurePlayer();
         _position = 0;
         _duration = 0;
-
-        var generation = _generation;
-        mpv.DoublePropertyChanged += (name, value) => Post(generation, () => OnDouble(name, value));
-        mpv.FlagPropertyChanged += (name, value) => Post(generation, () => OnFlag(name, value));
-        mpv.EndFile += () => Post(generation, OnEndFile);
-        mpv.Observe(ObserveTimePos, "time-pos");
-        mpv.Observe(ObserveDuration, "duration");
-        mpv.Observe(ObservePause, "pause");
-        mpv.StartEventLoop();
-        mpv.Command("loadfile", path);
+        _focusCheckPending = true;
+        // A paused previous file leaves pause set; the new one starts playing.
+        _mpv.SetString("pause", "no");
+        // Counted only for a loadfile mpv accepted: every accepted one starts a file (START_FILE), even a broken one.
+        _currentFile++;
+        try { _mpv.Command("loadfile", path, "replace"); }
+        catch
+        {
+            _currentFile--;
+            throw;
+        }
+        Reposition();
+        UpdateVisibility();
         Logger.Debug("Playing {0}", path);
+    }
+
+    // Unloads the file and hides the child. The handle stays.
+    private void Unload()
+    {
+        if (_child != IntPtr.Zero) Win32.ShowWindow(_child, Win32.SW_HIDE);
+        if (_mpv == null) return;
+        try { _mpv.Command("stop"); }
+        catch (Exception ex) { Logger.Warn(ex, "mpv stop failed"); }
     }
 
     private void Teardown()
     {
-        _generation++;
+        _focusTimer?.Stop();
+        _focusTimer = null;
         var mpv = _mpv;
         _mpv = null;
         if (mpv != null)
@@ -259,10 +357,12 @@ internal sealed partial class VideoPlaybackController : IDisposable
         catch (MpvException ex) { Logger.Debug(ex, "Seek failed"); }
     }
 
+    // Shown while a file is loaded and no overlay covers it.
     private void UpdateVisibility()
     {
         if (_child == IntPtr.Zero) return;
-        Win32.ShowWindow(_child, State.Hidden ? Win32.SW_HIDE : Win32.SW_SHOWNA);
+        var show = State.Phase != VideoPhase.Idle && !State.Hidden;
+        Win32.ShowWindow(_child, show ? Win32.SW_SHOWNA : Win32.SW_HIDE);
     }
 
     private void Transition(Action change)
@@ -278,14 +378,49 @@ internal sealed partial class VideoPlaybackController : IDisposable
         if (State.Phase != before) PhaseChanged?.Invoke(State.Phase);
     }
 
+    // ---- keyboard focus ----
+
+    // Posted, so it runs after whatever moved focus in this turn.
+    private void PostFocusCheck() => _ui.TryEnqueue(ReturnFocusIfLost);
+
+    // Win32 focus on the top-level window or inside the player means no XAML element gets keys: hand it back to the
+    // island's input window. Focus anywhere else (a popup, another window) is left alone.
+    private void ReturnFocusIfLost()
+    {
+        if (_disposed || Win32.GetForegroundWindow() != _parent) return;
+        var focus = Win32.GetFocus();
+        var lost = focus == _parent || (_child != IntPtr.Zero && (focus == _child || Win32.IsChild(_child, focus)));
+        if (!lost) return;
+        var input = FindDescendant(_parent, "InputSiteWindowClass");
+        if (input == IntPtr.Zero) return;
+        Win32.SetFocus(input);
+        Logger.Debug("Keyboard focus returned to the viewer (it was on {0})", focus == _parent ? "the window" : "the player");
+        FocusReturned?.Invoke();
+    }
+
+    private static IntPtr FindDescendant(IntPtr parent, string className)
+    {
+        for (var child = Win32.FindWindowEx(parent, IntPtr.Zero, null, null); child != IntPtr.Zero;
+             child = Win32.FindWindowEx(parent, child, null, null))
+        {
+            if (Win32.ClassNameIs(child, className)) return child;
+            var deeper = FindDescendant(child, className);
+            if (deeper != IntPtr.Zero) return deeper;
+        }
+        return IntPtr.Zero;
+    }
+
     // ---- mpv events (marshalled) ----
 
-    // Runs on the mpv event thread: never block here (Dispose joins this thread from the UI thread), just queue.
-    private void Post(int generation, Action action)
+    // Runs on the mpv event thread: never block here (Dispose joins this thread from the UI thread), just queue,
+    // tagged with the file the event belongs to.
+    private void Post(Action action)
     {
+        var file = Volatile.Read(ref _startedFiles);
         _ui.TryEnqueue(() =>
         {
-            if (generation != _generation || _disposed) return; // from a player torn down since
+            // From an earlier file, an unloaded one, or a disposed player.
+            if (_disposed || file != _currentFile || State.Phase == VideoPhase.Idle) return;
             action();
         });
     }
@@ -299,6 +434,11 @@ internal sealed partial class VideoPlaybackController : IDisposable
             default: return;
         }
         PositionChanged?.Invoke(_position, _duration);
+        if (_focusCheckPending)
+        {
+            _focusCheckPending = false;
+            PostFocusCheck();
+        }
     }
 
     private void OnFlag(string name, bool value)
@@ -312,6 +452,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
         if (eof == "yes") Transition(State.Ended);
     }
 
+    // The current file ended without keep-open holding it (a load or decode error).
     private void OnEndFile() => Transition(State.Ended);
 
     // ---- placement ----
@@ -349,8 +490,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
 
     private static partial class Win32
     {
-        internal const uint WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000, WS_DISABLED = 0x08000000,
-            WS_CLIPSIBLINGS = 0x04000000;
+        internal const uint WS_CHILD = 0x40000000, WS_DISABLED = 0x08000000, WS_CLIPSIBLINGS = 0x04000000;
         internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
         internal const uint SWP_NOACTIVATE = 0x0010;
         internal const int SW_HIDE = 0, SW_SHOWNA = 8;
@@ -371,5 +511,31 @@ internal sealed partial class VideoPlaybackController : IDisposable
         [LibraryImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static partial bool DestroyWindow(IntPtr hwnd);
+
+        [LibraryImport("user32.dll")]
+        internal static partial IntPtr GetFocus();
+
+        [LibraryImport("user32.dll")]
+        internal static partial IntPtr GetForegroundWindow();
+
+        [LibraryImport("user32.dll")]
+        internal static partial IntPtr SetFocus(IntPtr hwnd);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool IsChild(IntPtr parent, IntPtr hwnd);
+
+        [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+        internal static partial IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string windowName);
+
+        [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
+        private static unsafe partial int GetClassName(IntPtr hwnd, char* buffer, int max);
+
+        internal static unsafe bool ClassNameIs(IntPtr hwnd, string name)
+        {
+            var buffer = stackalloc char[256];
+            var length = GetClassName(hwnd, buffer, 256);
+            return new ReadOnlySpan<char>(buffer, length).SequenceEqual(name);
+        }
     }
 }
