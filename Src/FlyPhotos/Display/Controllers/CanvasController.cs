@@ -228,6 +228,9 @@ internal partial class CanvasController : ICanvasController
                 case PdfHqDisplayItem pdfDispItem:
                     HandleHqPdfDisplayItem(photo, pdfDispItem, ctx);
                     break;
+                case VideoHqDisplayItem videoDispItem:
+                    HandleHqVideoDisplayItem(photo, videoDispItem, ctx);
+                    break;
                 case HqDisplayItem hqDispItem:
                     HandleHqStaticDisplayItem(photo, hqDispItem, ctx);
                     break;
@@ -315,6 +318,14 @@ internal partial class CanvasController : ICanvasController
             new StaticImageRenderer(_d2dCanvas, hqDispItem.Bitmap,
                 photo.SupportsTransparency, RequestInvalidate, mipChainOwner: hqDispItem),
             _imageSize, hqDispItem.Rotation, ctx, forceThumbNailRedraw: true);
+    }
+
+    // UI thread. A video: its still frame (laid out like a static HQ, mip chain included) with the play glyph on top.
+    private void HandleHqVideoDisplayItem(Photo photo, VideoHqDisplayItem videoDispItem, PhotoInstallContext ctx)
+    {
+        InstallRenderer(
+            new VideoStillRenderer(_d2dCanvas, videoDispItem, RequestInvalidate),
+            _imageSize, videoDispItem.Rotation, ctx, forceThumbNailRedraw: true);
     }
 
     // UI thread. A multi-page TIFF or ICO; the renderer decodes the pages from the file bytes, starting at page 0.
@@ -803,6 +814,15 @@ internal partial class CanvasController : ICanvasController
         return tp.X >= imageRect.X && tp.Y >= imageRect.Y
                                    && tp.X <= imageRect.Right && tp.Y <= imageRect.Bottom;
     }
+
+    /// <summary>
+    /// UI thread. Whether <paramref name="canvasDip"/> (canvas DIPs) is on the play glyph: only while a video still is
+    /// installed. The renderer reference is read racily; a stale answer only lasts until the next install.
+    /// </summary>
+    public bool IsOnPlayGlyph(Point canvasDip) =>
+        Volatile.Read(ref _currentRenderer) is VideoStillRenderer
+        && VideoStillRenderer.HitsPlayGlyph(
+            new Windows.Foundation.Size(_d2dCanvas.ActualWidth, _d2dCanvas.ActualHeight), canvasDip);
 
     /// <summary>True while a pan/zoom animation or continuous zoom is in progress.</summary>
     public bool IsPanZoomAnimating => _canvasViewManager.PanZoomAnimationOnGoing || _continuousZoomActive;

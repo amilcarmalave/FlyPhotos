@@ -14,6 +14,7 @@ using FlyPhotos.Infra.Utils;
 using FlyPhotos.UI.Views;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Brushes;
+using FlyPhotos.Display.ImageRendering;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
@@ -564,6 +565,14 @@ internal partial class ThumbNailController : IThumbnailController
                               (float)(destRect.Height / bitmap.Size.Height))
                           * Matrix3x2.CreateTranslation((float)destRect.X, (float)destRect.Y);
         ds.FillRoundedRectangle(destRect, Constants.ThumbnailCornerRadius, Constants.ThumbnailCornerRadius, brush);
+
+        // A video gets a small play badge, bottom-left. Nothing allocated per slot: the format is cached.
+        if (photo?.IsVideo == true)
+        {
+            const double Badge = 16, Inset = 4;
+            PlayGlyph.Draw(ds, new Rect(destRect.X + Inset, destRect.Bottom - Badge - Inset, Badge, Badge),
+                PlayGlyph.BadgeFormat);
+        }
     }
 
     // --- Threading helpers ---

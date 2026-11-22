@@ -331,6 +331,7 @@ internal sealed class FakeCanvas : ICanvasController
     public Task WaitForPanZoomAnimationAsync(int timeoutMs) => Animation;
     /// <summary>The page on screen of a multi-page photo; null for any other.</summary>
     public MultiPagePosition? CurrentPage { get; set; }
+    public bool IsOnPlayGlyph(Windows.Foundation.Point canvasDip) => false;
     public void OnPhotoRenamed(string oldPath, string newPath) => Renames.Add((oldPath, newPath));
 
     public void Dispose()

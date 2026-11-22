@@ -24,6 +24,9 @@ internal interface ICanvasController : IDisposable
 
     /// <summary>A photo was renamed: the canvas knows photos by path, so it follows the new one.</summary>
     void OnPhotoRenamed(string oldPath, string newPath);
+
+    /// <summary>Whether <paramref name="canvasDip"/> is on the play glyph of the video still on screen (false for any other).</summary>
+    bool IsOnPlayGlyph(Windows.Foundation.Point canvasDip);
 }
 
 /// <summary>The thumbnail strip, as <see cref="PhotoDisplayController"/> drives it.</summary>
