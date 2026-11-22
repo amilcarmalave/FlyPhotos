@@ -166,6 +166,39 @@
 		</Content>
 	</ItemGroup>
 
+	<!-- libmpv: fetched at build time from a pinned, hash-checked release of this repo
+            (unmodified shinchiro/mpv-winbuild-cmake build, GPL). -->
+	<PropertyGroup>
+		<LibMpvTag>20261111</LibMpvTag>
+		<LibMpvRelease>libmpv-$(LibMpvTag)</LibMpvRelease>
+		<LibMpvSha256_x64>273c079b11ea5575822f972756f4c9a71149a5c10130353abeb8586738938452</LibMpvSha256_x64>
+		<LibMpvSha256_ARM64>a42c1cebf7366a957c7c321a20df414b80d4a55bbc65ded032d78b749c8d6445</LibMpvSha256_ARM64>
+	</PropertyGroup>
+
+	<Target Name="FetchLibMpv" BeforeTargets="BeforeBuild" Condition="'$(Platform)'=='x64' or '$(Platform)'=='ARM64'">
+		<PropertyGroup>
+			<LibMpvArch Condition="'$(Platform)'=='x64'">x86_64</LibMpvArch>
+			<LibMpvArch Condition="'$(Platform)'=='ARM64'">aarch64</LibMpvArch>
+			<LibMpvAsset>mpv-dev-$(LibMpvArch)-$(LibMpvTag)-git-bcde6b93cc.7z</LibMpvAsset>
+			<LibMpvHash Condition="'$(Platform)'=='x64'">$(LibMpvSha256_x64)</LibMpvHash>
+			<LibMpvHash Condition="'$(Platform)'=='ARM64'">$(LibMpvSha256_ARM64)</LibMpvHash>
+			<LibMpvOutDir>$(MSBuildProjectDirectory)\External\$(Platform)</LibMpvOutDir>
+			<LibMpvDll>$(LibMpvOutDir)\libmpv-2.dll</LibMpvDll>
+		</PropertyGroup>
+		<Message Importance="high" Text="Downloading libmpv $(LibMpvTag) ($(Platform)) from the $(LibMpvRelease) release" Condition="!Exists('$(LibMpvDll)')" />
+		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Build\FetchLibMpv.ps1&quot; -Platform $(Platform) -Release $(LibMpvRelease) -Asset $(LibMpvAsset) -Sha256 $(LibMpvHash) -OutDir &quot;$(LibMpvOutDir)&quot;" Condition="!Exists('$(LibMpvDll)')" />
+		<!-- The wildcards above were evaluated before the download; add the fetched DLL with the same metadata. -->
+		<ItemGroup Condition="'@(ExternalBinaries->AnyHaveMetadataValue('Filename', 'libmpv-2'))' != 'true' and Exists('$(LibMpvDll)')">
+			<ExternalBinaries Include="$(LibMpvDll)" />
+			<None Include="$(LibMpvDll)" />
+			<Content Include="$(LibMpvDll)">
+				<Link>libmpv-2.dll</Link>
+				<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+				<Visible>false</Visible>
+			</Content>
+		</ItemGroup>
+	</Target>
+
 	<!-- 4. PUBLISH LOGIC (Unpackaged):
             'dotnet publish' ignores the Link attribute. 
             This target manually copies them to the root of the publish folder. -->

@@ -33,3 +33,6 @@ win-ARM64.pubxml.user
 /Src/FlyPhotos/.agents/
 /Src/FlyPhotos/.claude/
 /Src/FlyPhotos/skills-lock.json
+
+# libmpv is fetched at build time (Src/FlyPhotos/Build/FetchLibMpv.ps1)
+Src/FlyPhotos/External/*/libmpv-2.dll
