@@ -219,6 +219,7 @@
                         VerticalAlignment="Center"
                         AllowFocusOnInteraction="False"
                         IsTabStop="False"
+                        IsEnabled="False"
                         IsThumbToolTipEnabled="False"
                         Maximum="1"
                         Minimum="0"

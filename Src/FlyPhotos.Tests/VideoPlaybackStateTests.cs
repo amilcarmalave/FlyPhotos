@@ -126,6 +126,18 @@ public sealed class VideoPlaybackStateTests
     }
 
     [TestMethod]
+    public void A_file_that_fails_to_load_stops_rather_than_ending()
+    {
+        // mpv's END_FILE (keep-open: only a load or decode error) stops the player, so the bar resets and nothing
+        // is left to restart or toggle: a toggle is a no-op and Play loads the file afresh.
+        var s = Playing();
+        s.Stop();
+        Assert.AreEqual(VideoPhase.Idle, s.Phase);
+        Assert.AreEqual(PlayAction.None, s.TogglePause());
+        Assert.AreEqual(PlayAction.Load, s.Play("a.mp4"));
+    }
+
+    [TestMethod]
     public void Play_other_path_restarts()
     {
         var s = Playing("a.mp4");

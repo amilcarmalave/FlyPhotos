@@ -33,6 +33,27 @@ internal static partial class NativeMpv
         public IntPtr Data;
     }
 
+    /// <summary>The start of mpv_event_end_file: why the file ended, and the error for <see cref="EndFileError"/>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MpvEventEndFile
+    {
+        public int Reason;
+        public int Error;
+    }
+
+    internal const int EndFileEof = 0, EndFileStop = 2, EndFileQuit = 3, EndFileError = 4, EndFileRedirect = 5;
+
+    /// <summary>mpv_end_file_reason as text, for the log.</summary>
+    internal static string EndFileReasonName(int reason) => reason switch
+    {
+        EndFileEof => "eof",
+        EndFileStop => "stop",
+        EndFileQuit => "quit",
+        EndFileError => "error",
+        EndFileRedirect => "redirect",
+        _ => reason.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct MpvEventProperty
     {
@@ -87,7 +108,8 @@ internal sealed class MpvHandle : IDisposable
 
     public event Action<string, double> DoublePropertyChanged;
     public event Action<string, bool> FlagPropertyChanged;
-    public event Action EndFile;
+    /// <summary>A file ended (mpv's END_FILE): its mpv_end_file_reason and, for an error, mpv's error code.</summary>
+    public event Action<int, int> EndFile;
     /// <summary>A file starts loading (mpv's START_FILE), before any of its property changes.</summary>
     public event Action StartFile;
 
@@ -200,7 +222,8 @@ internal sealed class MpvHandle : IDisposable
                         StartFile?.Invoke();
                         break;
                     case NativeMpv.EventEndFile:
-                        EndFile?.Invoke();
+                        var end = (NativeMpv.MpvEventEndFile*)ev->Data;
+                        EndFile?.Invoke(end == null ? -1 : end->Reason, end == null ? 0 : end->Error);
                         break;
                     case NativeMpv.EventPropertyChange:
                         RaiseProperty((NativeMpv.MpvEventProperty*)ev->Data);

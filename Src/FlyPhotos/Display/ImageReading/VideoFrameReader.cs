@@ -166,7 +166,7 @@ internal static class VideoFrameReader
         using var mpv = MpvHandle.Create(Options);
         var ended = 0;
         // Paused, a playable file never ends; one that can't be played ends at once.
-        mpv.EndFile += () => Volatile.Write(ref ended, 1);
+        mpv.EndFile += (_, _) => Volatile.Write(ref ended, 1);
         mpv.StartEventLoop();
         mpv.Command("loadfile", path);
 

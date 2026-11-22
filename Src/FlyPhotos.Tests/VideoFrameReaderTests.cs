@@ -41,7 +41,7 @@ public sealed class VideoFrameReaderTests
         using (var mpv = MpvHandle.Create(options))
         {
             using var ended = new ManualResetEventSlim();
-            mpv.EndFile += ended.Set;
+            mpv.EndFile += (_, _) => ended.Set();
             mpv.StartEventLoop();
             mpv.Command("loadfile", source);
             Assert.IsTrue(ended.Wait(TimeSpan.FromSeconds(20)), $"encoding {output} never ended");

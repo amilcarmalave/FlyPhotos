@@ -684,6 +684,8 @@ public sealed partial class PhotoDisplayWindow
             ReleaseOverlaysUntilActivated();
             return;
         }
+        // A seek-bar drag cut off by Alt+Tab never sees its release here: end it, or the bar stays frozen.
+        EndSliderDrag();
         if (_burstKey == VirtualKey.None) return;
         await EndBurstAsync();
     }
@@ -1006,7 +1008,8 @@ public sealed partial class PhotoDisplayWindow
     private bool TryPlayFromGlyph(Point rawPosition)
     {
         if (!_photoController.CurrentPhotoIsVideo || !_canvasController.IsOnPlayGlyph(rawPosition)) return false;
-        if (_openOverlays == 0) _video.Play(_photoController.GetFullPathCurrentFile());
+        // Not while closing: the close has stopped the player, and the exit animation runs on the still.
+        if (_openOverlays == 0 && !_isClosing) _video.Play(_photoController.GetFullPathCurrentFile());
         return true;
     }
 
@@ -1471,7 +1474,7 @@ public sealed partial class PhotoDisplayWindow
         {
             var currentFilePath = _photoController.GetFullPathCurrentFile();
             // Every item change ends here (navigation, delete, rename, Folder mode changes, folder switches).
-            if (_video.State.Path != null && currentFilePath != _video.State.Path) _video.Stop();
+            _video.ItemChanged(currentFilePath);
             UpdateVideoBarVisibility();
             ExifInfoPanel.CloseIfFileChanged(currentFilePath);
             CloseRenameFlyoutIfFileChanged(currentFilePath);
@@ -1554,11 +1557,11 @@ public sealed partial class PhotoDisplayWindow
         UpdateMuteGlyph();
     }
 
-    // Space: starts the video on screen, or pauses/resumes it. Nothing on a photo, or while an overlay is open (the
-    // video could not be seen under it).
+    // Space: starts the video on screen, or pauses/resumes it. Nothing on a photo, while an overlay is open (the
+    // video could not be seen under it), or while the window closes (the close stopped the player for good).
     private void VideoPlayPause()
     {
-        if (!_photoController.CurrentPhotoIsVideo || _openOverlays > 0) return;
+        if (!_photoController.CurrentPhotoIsVideo || _openOverlays > 0 || _isClosing) return;
         var path = _photoController.GetFullPathCurrentFile();
         if (_video.State.Phase == VideoPhase.Idle || _video.State.Path != path)
             _video.Play(path);
@@ -1615,11 +1618,13 @@ public sealed partial class PhotoDisplayWindow
         _videoPosition = 0;
         _videoDuration = 0;
         SetSlider(0, 1);
+        // Nothing loaded, nothing to seek: the thumb doesn't move until a video plays.
+        SliderVideoPosition.IsEnabled = false;
         ButtonVideoPlayPause.Content = PlayGlyph;
         UpdateVideoTimeText();
     }
 
-    // The same guard as Space: nothing while an overlay is open.
+    // The same guards as Space: nothing while an overlay is open or the window closes.
     private void ButtonVideoPlayPause_OnClick(object sender, RoutedEventArgs e) => VideoPlayPause();
 
     private void ButtonVideoMute_OnClick(object sender, RoutedEventArgs e) => VideoToggleMute();
@@ -1631,6 +1636,7 @@ public sealed partial class PhotoDisplayWindow
             ResetVideoBar();
             return;
         }
+        SliderVideoPosition.IsEnabled = true;
         ButtonVideoPlayPause.Content = phase == VideoPhase.Playing ? PauseGlyph : PlayGlyph;
     }
 
@@ -1669,7 +1675,11 @@ public sealed partial class PhotoDisplayWindow
 
     // Released, or capture lost with the button up (the release happened outside the window): one exact seek to
     // where the thumb is. Capture moving between the slider's own parts mid-drag (button still down) is not an end.
-    private void SliderVideoPosition_PointerReleased(object sender, PointerRoutedEventArgs e)
+    private void SliderVideoPosition_PointerReleased(object sender, PointerRoutedEventArgs e) => EndSliderDrag();
+
+    // The end of a drag (release, capture lost with the button up, or the window deactivated): one exact seek to
+    // where the thumb is.
+    private void EndSliderDrag()
     {
         if (!_sliderDragging) return;
         _sliderDragging = false;
@@ -1679,7 +1689,9 @@ public sealed partial class PhotoDisplayWindow
     private void SliderVideoPosition_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (_sliderUpdating) return;
-        // A drag, or the press itself (the thumb jumps to the click): fast seeks now, the exact one on release.
+        // During a drag: fast (keyframe) seeks, and the exact one on release. The press itself moves the thumb to the
+        // click before our PointerPressed handler runs (the slider handles the press first), so that jump is not yet
+        // a drag and seeks exactly; the release then seeks exactly to the same place once more (harmless).
         _video.SeekTo(e.NewValue, exact: !_sliderDragging);
         _videoPosition = e.NewValue;
         UpdateVideoTimeText();
@@ -1777,8 +1789,19 @@ public sealed partial class PhotoDisplayWindow
 
     private void ShareCurrentFile()
     {
-        HoldOverlayUntilActivated();
-        FileShareDialogService.ShareFile(this, _photoController.GetFullPathCurrentFile());
+        var hold = VideoOverlay();
+        _overlaysUntilActivated.Add(hold);
+        try
+        {
+            FileShareDialogService.ShareFile(this, _photoController.GetFullPathCurrentFile());
+        }
+        catch (Exception ex)
+        {
+            // No dialog came up, so nothing will reactivate this window: let the video go now.
+            Logger.Error(ex, "Could not open the share dialog");
+            _overlaysUntilActivated.Remove(hold);
+            hold.Dispose();
+        }
     }
 
     private void ShowFileProperties(bool details)

@@ -29,6 +29,11 @@ internal sealed partial class VideoPlaybackController : IDisposable
 
     private const ulong ObserveTimePos = 1, ObserveDuration = 2, ObservePause = 3;
 
+    // How long after the last volume or mute change the settings are saved: a held Shift+Up repeats ~30 times a
+    // second, and one save per repeat could also land out of order and keep a stale volume. The window's volume
+    // readout shows for as long.
+    private static readonly TimeSpan SettingsSaveDelay = TimeSpan.FromMilliseconds(1500);
+
     private readonly FrameworkElement _canvas;
     private readonly FrameworkElement _titleBar;
     private readonly FrameworkElement _bottomPanel;
@@ -54,6 +59,12 @@ internal sealed partial class VideoPlaybackController : IDisposable
     private double _position;
     private double _duration;
     private bool _disposed;
+    // Restarted by each volume or mute change; saves the settings once the changes stop. Made on first use.
+    private DispatcherQueueTimer _saveTimer;
+    private bool _savePending;
+    // The file mpv could not play, until another item is shown (ItemChanged): playing it again would only flash the
+    // empty player over the still and fail the same way.
+    private string _failedPath;
 
     public VideoPlaybackState State { get; } = new();
 
@@ -93,6 +104,11 @@ internal sealed partial class VideoPlaybackController : IDisposable
     public void Play(string path)
     {
         if (_disposed) return;
+        if (State.Phase == VideoPhase.Idle && string.Equals(path, _failedPath, StringComparison.Ordinal))
+        {
+            Logger.Debug("Not playing {0}: it failed to play", path);
+            return;
+        }
         var before = State.Phase;
         var action = State.Play(path);
         try
@@ -136,7 +152,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
         var volume = ClampVolume(ClampVolume(AppConfig.Settings.VideoVolume) + delta);
         AppConfig.Settings.VideoVolume = volume;
         SetProperty("volume", volume.ToString(CultureInfo.InvariantCulture));
-        _ = AppConfig.SaveAsync();
+        ScheduleSave();
     }
 
     public void ToggleMute()
@@ -144,7 +160,28 @@ internal sealed partial class VideoPlaybackController : IDisposable
         var muted = !AppConfig.Settings.VideoMuted;
         AppConfig.Settings.VideoMuted = muted;
         SetProperty("mute", muted ? "yes" : "no");
-        _ = AppConfig.SaveAsync();
+        ScheduleSave();
+    }
+
+    // The settings already hold the change; the file is written once the changes stop (or on Dispose).
+    private void ScheduleSave()
+    {
+        if (_disposed) return;
+        _savePending = true;
+        if (_saveTimer == null)
+        {
+            _saveTimer = _ui.CreateTimer();
+            _saveTimer.Interval = SettingsSaveDelay;
+            _saveTimer.IsRepeating = false;
+            _saveTimer.Tick += (_, _) =>
+            {
+                if (!_savePending) return;
+                _savePending = false;
+                _ = AppConfig.SaveAsync();
+            };
+        }
+        _saveTimer.Stop();
+        _saveTimer.Start();
     }
 
     public void OverlayOpened() => Transition(() =>
@@ -181,6 +218,16 @@ internal sealed partial class VideoPlaybackController : IDisposable
     }
 
     /// <summary>
+    /// The window shows <paramref name="path"/> (every item change): stops a video of another file, and lets a file
+    /// that failed to play be tried again once the viewer has moved off it.
+    /// </summary>
+    public void ItemChanged(string path)
+    {
+        if (!string.Equals(path, _failedPath, StringComparison.Ordinal)) _failedPath = null;
+        if (State.Path != null && path != State.Path) Stop();
+    }
+
+    /// <summary>
     /// <see cref="Stop"/>, then waits (up to 2 s) until mpv has closed the file, so the caller can delete or rename
     /// it: mpv opens files without FILE_SHARE_DELETE.
     /// </summary>
@@ -201,6 +248,14 @@ internal sealed partial class VideoPlaybackController : IDisposable
         State.Stop();
         RaiseIfChanged(before);
         _disposed = true;
+        _saveTimer?.Stop();
+        _saveTimer = null;
+        // The window is closing: a volume or mute change still waiting for its save is written now.
+        if (_savePending)
+        {
+            _savePending = false;
+            AppConfig.Save();
+        }
         Teardown();
         _canvas.SizeChanged -= OnLayoutChanged;
         _titleBar.SizeChanged -= OnLayoutChanged;
@@ -240,7 +295,8 @@ internal sealed partial class VideoPlaybackController : IDisposable
                 ["osc"] = "no",
                 ["osd-level"] = "0",
                 ["hwdec"] = "auto-safe",
-                // At the end mpv keeps the last frame and pauses (no END_FILE); see OnPause.
+                // At the end mpv keeps the last frame and pauses (no END_FILE); see OnFlag. END_FILE then means
+                // the file could not be played (OnEndFile).
                 ["keep-open"] = "yes",
                 // Keep mpv's render window between files, so it is made once rather than per video.
                 ["force-window"] = "yes",
@@ -251,10 +307,10 @@ internal sealed partial class VideoPlaybackController : IDisposable
             mpv.StartFile += () => Interlocked.Increment(ref _startedFiles);
             mpv.DoublePropertyChanged += (name, value) => Post(() => OnDouble(name, value));
             mpv.FlagPropertyChanged += (name, value) => Post(() => OnFlag(name, value));
-            mpv.EndFile += () =>
+            mpv.EndFile += (reason, error) =>
             {
                 Interlocked.Exchange(ref _fileClosed, null)?.TrySetResult();
-                Post(OnEndFile);
+                Post(() => OnEndFile(reason, error));
             };
             mpv.Observe(ObserveTimePos, "time-pos");
             mpv.Observe(ObserveDuration, "duration");
@@ -458,8 +514,19 @@ internal sealed partial class VideoPlaybackController : IDisposable
         if (eof == "yes") Transition(State.Ended);
     }
 
-    // The current file ended without keep-open holding it (a load or decode error).
-    private void OnEndFile() => Transition(State.Ended);
+    // The current file ended without keep-open holding it: a load or decode error (or a stop mpv made itself). Spec
+    // section 4: log it, stop, and keep showing the still. Unloading hides the player, which would otherwise stay
+    // over the still as a black box (force-window keeps mpv's window), and Idle makes Space load the file afresh.
+    private void OnEndFile(int reason, int error)
+    {
+        if (reason == NativeMpv.EndFileError)
+            Logger.Warn("Could not play {0}: {1}", State.Path, NativeMpv.Error(error));
+        else
+            Logger.Info("Playback of {0} ended ({1})", State.Path, NativeMpv.EndFileReasonName(reason));
+        var path = State.Path;
+        Stop();
+        _failedPath = path;
+    }
 
     // ---- placement ----
 
