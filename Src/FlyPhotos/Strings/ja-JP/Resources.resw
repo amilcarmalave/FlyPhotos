@@ -1305,4 +1305,19 @@ High Quality Cubic – 写真に最適な最高品質のスケーリングです
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>ミュート / ミュート解除</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>ビデオを表示</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>次回 FlyPhotos を起動したときに有効になります。</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>再生 / 一時停止 (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>ミュート / ミュート解除</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>音量 {0}%</value>
+  </data>
 </root>

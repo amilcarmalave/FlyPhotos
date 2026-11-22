@@ -1305,4 +1305,19 @@ High Quality Cubic – A legjobb minőségű méretezés fotókhoz.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Némítás / némítás feloldása</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Videók megjelenítése</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>A FlyPhotos következő indításakor lép életbe.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Lejátszás / szünet (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Némítás / némítás feloldása</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Hangerő {0}%</value>
+  </data>
 </root>

@@ -1306,4 +1306,19 @@ High Quality Cubic – Schaling van de hoogste kwaliteit voor foto's.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Dempen / dempen opheffen</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Video's weergeven</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Wordt van kracht de volgende keer dat FlyPhotos start.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Afspelen / pauzeren (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Dempen / dempen opheffen</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Volume {0}%</value>
+  </data>
 </root>

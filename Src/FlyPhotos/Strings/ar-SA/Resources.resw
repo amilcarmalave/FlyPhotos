@@ -1306,4 +1306,19 @@ High Quality Cubic – تحجيم بأعلى جودة للصور.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>كتم / إلغاء كتم الصوت</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>إظهار مقاطع الفيديو</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>يسري مفعوله في المرة التالية التي يبدأ فيها FlyPhotos.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>تشغيل / إيقاف مؤقت (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>كتم / إلغاء كتم الصوت</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>مستوى الصوت {0}%</value>
+  </data>
 </root>

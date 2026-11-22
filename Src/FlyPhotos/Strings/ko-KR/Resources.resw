@@ -1305,4 +1305,19 @@ High Quality Cubic – 사진에 가장 적합한 최고 품질의 크기 조절
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>음소거 / 음소거 해제</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>비디오 표시</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>다음에 FlyPhotos를 시작할 때 적용됩니다.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>재생 / 일시 정지 (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>음소거 / 음소거 해제</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>볼륨 {0}%</value>
+  </data>
 </root>

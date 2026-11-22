@@ -1306,4 +1306,19 @@ High Quality Cubic – 适合照片的最高质量缩放。</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>静音/取消静音</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>显示视频</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>下次启动 FlyPhotos 时生效。</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>播放/暂停 (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>静音/取消静音</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>音量 {0}%</value>
+  </data>
 </root>

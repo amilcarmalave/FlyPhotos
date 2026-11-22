@@ -75,6 +75,7 @@ To open images with Fly Photos automatically when you double-click them:
   - Extended support for PSD (with transparency), HEIC/HEIF, AVIF, SVG, GIF, APNG, animated WebP, and DDS.
   - Camera RAW with a configurable decoder order - Rawler (fastest), WIC (system codecs), or ImageMagick (best compatibility) - plus an option to decode the real RAW data instead of the embedded JPEG.
   - Multi-page TIFF and multi-frame ICO, with page-by-page navigation.
+  - **Video playback** - MP4, MKV, WebM, MOV and more play right in the viewer (through libmpv), with a seek bar, mute and volume.
 
 - **Viewing experience**
   - Transparent background like Picasa Photo Viewer, or Mica, Acrylic, Frozen Glass, or a solid colour of your choice.

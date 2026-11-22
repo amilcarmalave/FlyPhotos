@@ -1306,4 +1306,19 @@ High Quality Cubic – Масштабування найвищої якості 
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Вимкнути / увімкнути звук</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Показувати відео</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Набуде чинності під час наступного запуску FlyPhotos.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Відтворити / пауза (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Вимкнути / увімкнути звук</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Гучність {0}%</value>
+  </data>
 </root>

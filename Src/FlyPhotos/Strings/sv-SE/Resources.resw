@@ -1306,4 +1306,19 @@ High Quality Cubic – Skalning med högsta kvalitet för foton.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Ljud av / på</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Visa videor</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Träder i kraft nästa gång FlyPhotos startas.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Spela upp / pausa (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Ljud av / på</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Volym {0} %</value>
+  </data>
 </root>

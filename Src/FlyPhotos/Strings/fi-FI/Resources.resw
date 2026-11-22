@@ -1306,4 +1306,19 @@ High Quality Cubic – Korkealaatuisin skaalaus valokuville.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Mykistä / poista mykistys</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Näytä videot</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Tulee voimaan, kun FlyPhotos käynnistetään seuraavan kerran.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Toista / keskeytä (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Mykistä / poista mykistys</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Äänenvoimakkuus {0} %</value>
+  </data>
 </root>

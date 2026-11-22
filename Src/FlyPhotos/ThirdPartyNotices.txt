@@ -1098,3 +1098,23 @@ limitations under the License.
    END OF TERMS AND CONDITIONS
 
 ======================================================================
+
+10. mpv (libmpv-2.dll)
+https://github.com/mpv-player/mpv
+Windows build: https://github.com/shinchiro/mpv-winbuild-cmake
+
+Licensed under the GNU General Public License (GPL). The libmpv build that
+FlyPhotos loads for video playback is the GPL build made by shinchiro's
+mpv-winbuild-cmake; it is used as a separate, unmodified DLL. Its source code
+is available from the links above.
+
+======================================================================
+
+11. FFmpeg (linked into libmpv-2.dll)
+https://ffmpeg.org
+
+Licensed under the GNU General Public License (GPL); the build bundled in
+libmpv-2.dll is a GPL build of FFmpeg. Its source code is available from
+https://ffmpeg.org and from the mpv-winbuild-cmake link above.
+
+======================================================================

@@ -1306,4 +1306,19 @@ High Quality Cubic – Масштабирование наивысшего ка�
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Выключить / включить звук</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Показывать видео</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Вступит в силу при следующем запуске FlyPhotos.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Воспроизвести / пауза (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Выключить / включить звук</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Громкость {0}%</value>
+  </data>
 </root>

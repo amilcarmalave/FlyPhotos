@@ -596,6 +596,14 @@
                             Margin="0,20,0,0"
                             Style="{StaticResource BodyStrongTextBlockStyle}" />
 
+                        <controls:SettingsCard
+                            x:Name="SettingsCardShowVideos"
+                            x:Uid="SettingsCardShowVideos"
+                            Margin="0,5,0,0"
+                            HeaderIcon="{ui:FontIcon Glyph=&#xE714;, FontFamily={StaticResource FluentIcons}}">
+                            <ToggleSwitch x:Name="ButtonShowVideos" />
+                        </controls:SettingsCard>
+
                         <controls:SettingsExpander
                             x:Name="SettingsCardDecodeRawData"
                             x:Uid="SettingsCardDecodeRawData"

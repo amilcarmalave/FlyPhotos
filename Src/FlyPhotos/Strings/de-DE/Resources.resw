@@ -1306,4 +1306,19 @@ High Quality Cubic – Skalierung mit höchster Qualität für Fotos.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Stummschalten / Ton an</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Videos anzeigen</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Wird beim nächsten Start von FlyPhotos wirksam.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Abspielen / pausieren (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Stummschalten / Ton an</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Lautstärke {0} %</value>
+  </data>
 </root>

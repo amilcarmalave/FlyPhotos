@@ -1,6 +1,7 @@
 #nullable enable
 using FlyPhotos.Core;
 using FlyPhotos.Core.Model;
+using FlyPhotos.Display.ImageReading;
 using FlyPhotos.Infra.Configuration;
 using FlyPhotos.Infra.Localization;
 using FlyPhotos.Infra.Utils;
@@ -134,6 +135,9 @@ internal sealed partial class Settings
         ButtonAllowMultiInstance.IsOn = AppConfig.Settings.AllowMultiInstance;
         ButtonConfirmBeforeDelete.IsOn = AppConfig.Settings.ConfirmForDelete;
         ButtonShowFileName.IsOn = AppConfig.Settings.ShowFileName;
+        ButtonShowVideos.IsOn = AppConfig.Settings.ShowVideos;
+        // Without libmpv no video is ever listed, so there is nothing to turn on or off.
+        SettingsCardShowVideos.Visibility = VideoFormats.LibMpvPresent ? Visibility.Visible : Visibility.Collapsed;
         ButtonShowCacheStatusExpander.IsOn = AppConfig.Settings.ShowCacheStatus;
         ButtonShowImageDimensions.IsOn = AppConfig.Settings.ShowImageDimensions;
         ComboPanZoomNavBehaviour.SelectedIndex = GetIndexForPanZoomBehaviour(AppConfig.Settings.PanZoomBehaviourOnNavigation);
@@ -174,6 +178,7 @@ internal sealed partial class Settings
         ButtonAllowMultiInstance.Toggled += ButtonAllowMultiInstance_OnToggled;
         ButtonConfirmBeforeDelete.Toggled += ButtonConfirmBeforeDelete_OnToggled;
         ButtonShowFileName.Toggled += ButtonShowFileName_OnToggled;
+        ButtonShowVideos.Toggled += ButtonShowVideos_OnToggled;
         ButtonShowImageDimensions.Toggled += ButtonShowImageDimensions_OnToggled;
         ButtonShowCacheStatusExpander.Toggled += ButtonShowCacheStatusExpander_OnToggled;
         ComboPanZoomNavBehaviour.SelectionChanged += ComboPanZoomNavBehaviour_OnSelectionChanged;
@@ -355,6 +360,13 @@ internal sealed partial class Settings
     {
         AppConfig.Settings.ShowFileName = ButtonShowFileName.IsOn;
         SettingChanged?.Invoke(Setting.FileNameShowHide);
+        await AppConfig.SaveAsync();
+    }
+
+    // Read when the supported formats are built at startup, so it takes effect on the next start: no SettingChanged.
+    private async void ButtonShowVideos_OnToggled(object s, RoutedEventArgs e)
+    {
+        AppConfig.Settings.ShowVideos = ButtonShowVideos.IsOn;
         await AppConfig.SaveAsync();
     }
 

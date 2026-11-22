@@ -1306,4 +1306,19 @@ High Quality Cubic – Redimensionamento de alta qualidade para fotos.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Silenciar / reativar som</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Mostrar vídeos</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Entra em vigor da próxima vez que o FlyPhotos for iniciado.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Reproduzir / pausar (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Silenciar / reativar som</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Volume {0}%</value>
+  </data>
 </root>

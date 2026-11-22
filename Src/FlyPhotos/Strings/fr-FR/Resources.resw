@@ -1306,4 +1306,19 @@ High Quality Cubic – Mise à l'échelle de la plus haute qualité pour les pho
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Couper / rétablir le son</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Afficher les vidéos</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Prend effet au prochain démarrage de FlyPhotos.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Lecture / pause (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Couper / rétablir le son</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Volume {0} %</value>
+  </data>
 </root>

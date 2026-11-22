@@ -251,7 +251,7 @@ public sealed partial class PhotoDisplayWindow
             () => _photoController.Brake(),
             () => AppConfig.Settings.MouseFwdBackBehavior == MouseFwdBackBehavior.StepZoom,
             () => AppConfig.Settings.SwapMouseFwdBack);
-        _opacityFader = new OpacityFader(new FrameworkElement[] { BorderButtonPanel, D2dCanvasThumbNail, BorderTxtFileName }, MainLayout, BottomPanel, AppConfig.Settings.AutoFade);
+        _opacityFader = new OpacityFader(new FrameworkElement[] { BorderButtonPanel, D2dCanvasThumbNail, BorderTxtFileName, BorderVideoBar }, MainLayout, BottomPanel, AppConfig.Settings.AutoFade);
         _inactivityFader = new InactivityFader(BorderTxtZoom);
         _folderNameFader = new InactivityFader(BorderTxtFolderName, hideDelayMs: 1500);
         _mouseAutoHider = new MouseAutoHider(MainLayout, AppConfig.Settings.AutoHideMouse, TimeSpan.FromSeconds(1));
@@ -276,11 +276,10 @@ public sealed partial class PhotoDisplayWindow
         _exifVisibilityToken = ExifInfoPanel.RegisterPropertyChangedCallback(
             UIElement.VisibilityProperty, ExifInfoPanel_VisibilityChanged);
 
-        InitCommands();
-        _videoSpike = Display.Video.VideoSpike.TryAttach(this, D2dCanvas, BottomPanel); // SPIKE
-    }
+        InitVideoBar();
 
-    private Display.Video.VideoSpike _videoSpike; // SPIKE
+        InitCommands();
+    }
 
     // Wraps a synchronous action as a command.
     private static Func<Task> Act(Action a) => () =>
@@ -361,9 +360,9 @@ public sealed partial class PhotoDisplayWindow
             [CommandId.VideoPlayPause] = Act(VideoPlayPause),
             [CommandId.VideoSeekForward] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.Seek(VideoSeekSeconds); }),
             [CommandId.VideoSeekBack] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.Seek(-VideoSeekSeconds); }),
-            [CommandId.VideoVolumeUp] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ChangeVolume(VideoVolumeStep); }),
-            [CommandId.VideoVolumeDown] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ChangeVolume(-VideoVolumeStep); }),
-            [CommandId.VideoMute] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ToggleMute(); })
+            [CommandId.VideoVolumeUp] = Act(() => VideoChangeVolume(VideoVolumeStep)),
+            [CommandId.VideoVolumeDown] = Act(() => VideoChangeVolume(-VideoVolumeStep)),
+            [CommandId.VideoMute] = Act(VideoToggleMute)
         };
 
 #if DEBUG
@@ -442,6 +441,14 @@ public sealed partial class PhotoDisplayWindow
         _captionScrimFader.Dispose();
 
         // Before the canvas: the player's child window sits over it and tracks its layout.
+        _videoVolumeTimer.Stop();
+        _videoVolumeTimer.Tick -= VideoVolumeTimer_Tick;
+        _video.PositionChanged -= Video_PositionChanged;
+        _video.PhaseChanged -= Video_PhaseChanged;
+        SliderVideoPosition.ValueChanged -= SliderVideoPosition_ValueChanged;
+        SliderVideoPosition.RemoveHandler(UIElement.PointerPressedEvent, _sliderPressedHandler);
+        SliderVideoPosition.RemoveHandler(UIElement.PointerReleasedEvent, _sliderReleasedHandler);
+        SliderVideoPosition.RemoveHandler(UIElement.PointerCaptureLostEvent, _sliderCaptureLostHandler);
         _video.Dispose();
         _canvasController.Dispose();
         _thumbNailController.Dispose();
@@ -1465,6 +1472,7 @@ public sealed partial class PhotoDisplayWindow
             var currentFilePath = _photoController.GetFullPathCurrentFile();
             // Every item change ends here (navigation, delete, rename, Folder mode changes, folder switches).
             if (_video.State.Path != null && currentFilePath != _video.State.Path) _video.Stop();
+            UpdateVideoBarVisibility();
             ExifInfoPanel.CloseIfFileChanged(currentFilePath);
             CloseRenameFlyoutIfFileChanged(currentFilePath);
             TxtFileName.Text = fileDisplayDetails.DisplayText;
@@ -1531,6 +1539,21 @@ public sealed partial class PhotoDisplayWindow
     }
     private const int VideoVolumeStep = 5;
 
+    private void VideoChangeVolume(int delta)
+    {
+        if (!_photoController.CurrentPhotoIsVideo) return;
+        _video.ChangeVolume(delta);
+        UpdateMuteGlyph();
+        ShowVolumeReadout();
+    }
+
+    private void VideoToggleMute()
+    {
+        if (!_photoController.CurrentPhotoIsVideo) return;
+        _video.ToggleMute();
+        UpdateMuteGlyph();
+    }
+
     // Space: starts the video on screen, or pauses/resumes it. Nothing on a photo, or while an overlay is open (the
     // video could not be seen under it).
     private void VideoPlayPause()
@@ -1542,6 +1565,155 @@ public sealed partial class PhotoDisplayWindow
         else
             _video.TogglePause();
     }
+
+    // ---- the video bar (play/pause, position, time, mute) ----
+
+    // While the user drags (or holds) the slider: seeks are fast (keyframes) and position reports are ignored, so
+    // the thumb stays under the pointer; the release seeks exactly.
+    private bool _sliderDragging;
+    // Set while the code moves the slider, so ValueChanged doesn't seek back to where the video already is.
+    private bool _sliderUpdating;
+    private double _videoPosition, _videoDuration;
+    // Shows "Volume n%" in place of the time for a moment after a volume change.
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer _videoVolumeTimer = null!;
+    private bool _volumeReadoutShown;
+    // The slider handles pointer input itself, so these are added with handledEventsToo.
+    private PointerEventHandler _sliderPressedHandler = null!;
+    private PointerEventHandler _sliderReleasedHandler = null!;
+    private PointerEventHandler _sliderCaptureLostHandler = null!;
+
+    private void InitVideoBar()
+    {
+        _video.PositionChanged += Video_PositionChanged;
+        _video.PhaseChanged += Video_PhaseChanged;
+        _videoVolumeTimer = DispatcherQueue.CreateTimer();
+        _videoVolumeTimer.Interval = TimeSpan.FromMilliseconds(1500);
+        _videoVolumeTimer.IsRepeating = false;
+        _videoVolumeTimer.Tick += VideoVolumeTimer_Tick;
+        _sliderPressedHandler = SliderVideoPosition_PointerPressed;
+        _sliderReleasedHandler = SliderVideoPosition_PointerReleased;
+        _sliderCaptureLostHandler = SliderVideoPosition_PointerCaptureLost;
+        SliderVideoPosition.AddHandler(UIElement.PointerPressedEvent, _sliderPressedHandler, true);
+        SliderVideoPosition.AddHandler(UIElement.PointerReleasedEvent, _sliderReleasedHandler, true);
+        SliderVideoPosition.AddHandler(UIElement.PointerCaptureLostEvent, _sliderCaptureLostHandler, true);
+        SliderVideoPosition.ValueChanged += SliderVideoPosition_ValueChanged;
+        UpdateMuteGlyph();
+        UpdateVideoBarVisibility();
+    }
+
+    // The bar shows only on a video; every item change comes through here. With nothing loaded the bar starts
+    // from zero.
+    private void UpdateVideoBarVisibility()
+    {
+        BorderVideoBar.Visibility = _photoController.CurrentPhotoIsVideo ? Visibility.Visible : Visibility.Collapsed;
+        if (_video.State.Phase == VideoPhase.Idle) ResetVideoBar();
+    }
+
+    private void ResetVideoBar()
+    {
+        _sliderDragging = false;
+        _videoPosition = 0;
+        _videoDuration = 0;
+        SetSlider(0, 1);
+        ButtonVideoPlayPause.Content = PlayGlyph;
+        UpdateVideoTimeText();
+    }
+
+    // The same guard as Space: nothing while an overlay is open.
+    private void ButtonVideoPlayPause_OnClick(object sender, RoutedEventArgs e) => VideoPlayPause();
+
+    private void ButtonVideoMute_OnClick(object sender, RoutedEventArgs e) => VideoToggleMute();
+
+    private void Video_PhaseChanged(VideoPhase phase)
+    {
+        if (phase == VideoPhase.Idle)
+        {
+            ResetVideoBar();
+            return;
+        }
+        ButtonVideoPlayPause.Content = phase == VideoPhase.Playing ? PauseGlyph : PlayGlyph;
+    }
+
+    private void Video_PositionChanged(double position, double duration)
+    {
+        if (_sliderDragging)
+        {
+            // The thumb (and the time shown) follow the pointer until release; only the length is taken.
+            _videoDuration = duration;
+            return;
+        }
+        _videoPosition = position;
+        _videoDuration = duration;
+        SetSlider(position, duration);
+        UpdateVideoTimeText();
+    }
+
+    private void SetSlider(double position, double duration)
+    {
+        _sliderUpdating = true;
+        try
+        {
+            SliderVideoPosition.Maximum = duration > 0 ? duration : 1;
+            SliderVideoPosition.Value = Math.Clamp(position, 0, SliderVideoPosition.Maximum);
+        }
+        finally { _sliderUpdating = false; }
+    }
+
+    private void SliderVideoPosition_PointerPressed(object sender, PointerRoutedEventArgs e) => _sliderDragging = true;
+
+    private void SliderVideoPosition_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(SliderVideoPosition).Properties.IsLeftButtonPressed) return;
+        SliderVideoPosition_PointerReleased(sender, e);
+    }
+
+    // Released, or capture lost with the button up (the release happened outside the window): one exact seek to
+    // where the thumb is. Capture moving between the slider's own parts mid-drag (button still down) is not an end.
+    private void SliderVideoPosition_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_sliderDragging) return;
+        _sliderDragging = false;
+        _video.SeekTo(SliderVideoPosition.Value, exact: true);
+    }
+
+    private void SliderVideoPosition_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_sliderUpdating) return;
+        // A drag, or the press itself (the thumb jumps to the click): fast seeks now, the exact one on release.
+        _video.SeekTo(e.NewValue, exact: !_sliderDragging);
+        _videoPosition = e.NewValue;
+        UpdateVideoTimeText();
+    }
+
+    private void UpdateVideoTimeText()
+    {
+        if (_volumeReadoutShown) return;
+        TxtVideoTime.Text = $"{VideoTimeFormat.Format(_videoPosition)} / {VideoTimeFormat.Format(_videoDuration)}";
+    }
+
+    private void ShowVolumeReadout()
+    {
+        _volumeReadoutShown = true;
+        TxtVideoTime.Text = string.Format(System.Globalization.CultureInfo.CurrentCulture, L.Get("VideoVolume/Text"),
+            _video.Volume);
+        _videoVolumeTimer.Stop();
+        _videoVolumeTimer.Start();
+    }
+
+    private void VideoVolumeTimer_Tick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        _videoVolumeTimer.Stop();
+        _volumeReadoutShown = false;
+        UpdateVideoTimeText();
+    }
+
+    private const string PlayGlyph = "\uE768", PauseGlyph = "\uE769";
+
+    private void UpdateMuteGlyph() => ButtonVideoMute.Content = MuteGlyph(_video.Muted, _video.Volume);
+
+    // Muted (or at 0): the crossed-out speaker; under 50 one wave, from 50 three.
+    private static string MuteGlyph(bool muted, int volume) =>
+        muted || volume <= 0 ? "\uE74F" : volume < 50 ? "\uE993" : "\uE995";
 
     /// <summary>
     /// Marks an overlay open until the returned scope is disposed (once; later calls do nothing). The first open

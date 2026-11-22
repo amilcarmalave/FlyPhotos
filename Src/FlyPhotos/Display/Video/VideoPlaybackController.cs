@@ -84,6 +84,12 @@ internal sealed partial class VideoPlaybackController : IDisposable
 
     public static int ClampVolume(int volume) => VideoPlaybackState.ClampVolume(volume);
 
+    /// <summary>The volume (0–<see cref="VideoPlaybackState.MaxVolume"/>) every video plays at, kept across files.</summary>
+    public int Volume => ClampVolume(AppConfig.Settings.VideoVolume);
+
+    /// <summary>Whether every video plays muted, kept across files.</summary>
+    public bool Muted => AppConfig.Settings.VideoMuted;
+
     public void Play(string path)
     {
         if (_disposed) return;

@@ -1306,4 +1306,19 @@ High Quality Cubic – Highest-quality scaling for photos.</value>
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>Mute / unmute</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>Show videos</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>Takes effect the next time FlyPhotos starts.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>Play / pause (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>Mute / unmute</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>Volume {0}%</value>
+  </data>
 </root>

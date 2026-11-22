@@ -1303,4 +1303,19 @@ High Quality Cubic – ഫോട്ടോകൾക്ക് ഏറ്റവു�
   <data name="ShortcutName_VideoMute" xml:space="preserve">
     <value>നിശബ്ദമാക്കുക / ശബ്ദം ഓണാക്കുക</value>
   </data>
+  <data name="SettingsCardShowVideos.Header" xml:space="preserve">
+    <value>വീഡിയോകൾ കാണിക്കുക</value>
+  </data>
+  <data name="SettingsCardShowVideos.Description" xml:space="preserve">
+    <value>അടുത്ത തവണ FlyPhotos ആരംഭിക്കുമ്പോൾ പ്രാബല്യത്തിൽ വരും.</value>
+  </data>
+  <data name="ButtonVideoPlayPauseToolTip.Content" xml:space="preserve">
+    <value>പ്ലേ / താൽക്കാലികമായി നിർത്തുക (Space)</value>
+  </data>
+  <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
+    <value>നിശബ്ദമാക്കുക / ശബ്ദം ഓണാക്കുക</value>
+  </data>
+  <data name="VideoVolume.Text" xml:space="preserve">
+    <value>ശബ്ദം {0}%</value>
+  </data>
 </root>
