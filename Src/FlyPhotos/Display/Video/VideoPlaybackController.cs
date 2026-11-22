@@ -320,7 +320,11 @@ internal sealed partial class VideoPlaybackController : IDisposable
             _mpv = mpv;
             _focusTimer = _ui.CreateTimer();
             _focusTimer.Interval = TimeSpan.FromMilliseconds(250);
-            _focusTimer.Tick += (_, _) => ReturnFocusIfLost();
+            _focusTimer.Tick += (_, _) =>
+            {
+                ReturnFocusIfLost();
+                UpdateCursorHiding();
+            };
             _focusTimer.Start();
         }
         catch
@@ -376,13 +380,62 @@ internal sealed partial class VideoPlaybackController : IDisposable
         {
             if (msg == Win32.WM_SETCURSOR && entry.Owner != null && entry.Owner.IsOverVideo(wParam, lParam))
             {
-                Win32.SetCursor(ArrowCursor);
+                Win32.SetCursor(entry.Owner.VideoCursor());
                 return 1;
             }
         }
         catch (Exception ex) { Logger.Warn(ex, "Video cursor hook failed"); }
         return Win32.CallWindowProc(entry.OldProc, hwnd, msg, wParam, lParam);
     }
+
+    // Over a playing video the cursor hides after a short rest, the way video players do (independent of the photo
+    // auto-hide setting); any movement, or a pause, brings it back.
+    private const long CursorHideAfterMs = 2000;
+    private Win32.POINT _lastCursorPos;
+    private long _lastCursorMoveMs;
+    private bool _cursorHidden;
+
+    // The cursor to show over the video; WM_SETCURSOR also arrives without movement, so it compares positions.
+    private IntPtr VideoCursor()
+    {
+        if (Win32.GetCursorPos(out var p) && (p.X != _lastCursorPos.X || p.Y != _lastCursorPos.Y))
+        {
+            _lastCursorPos = p;
+            _lastCursorMoveMs = Environment.TickCount64;
+            _cursorHidden = false;
+        }
+        return _cursorHidden && State.Phase == VideoPhase.Playing ? IntPtr.Zero : ArrowCursor;
+    }
+
+    // From the 250 ms timer: hide once the cursor has rested over the playing video; show it again on a pause.
+    private void UpdateCursorHiding()
+    {
+        if (_child == IntPtr.Zero || _disposed) return;
+        if (State.Phase != VideoPhase.Playing || Win32.GetForegroundWindow() != _parent)
+        {
+            if (_cursorHidden && IsCursorInChild())
+            {
+                _cursorHidden = false;
+                Win32.SetCursor(ArrowCursor);
+            }
+            _cursorHidden = false;
+            return;
+        }
+        if (_cursorHidden || !IsCursorInChild()) return;
+        if (Win32.GetCursorPos(out var p) && (p.X != _lastCursorPos.X || p.Y != _lastCursorPos.Y))
+        {
+            _lastCursorPos = p;
+            _lastCursorMoveMs = Environment.TickCount64;
+            return;
+        }
+        if (Environment.TickCount64 - _lastCursorMoveMs < CursorHideAfterMs) return;
+        _cursorHidden = true;
+        Win32.SetCursor(IntPtr.Zero);
+    }
+
+    private bool IsCursorInChild() =>
+        Win32.IsWindowVisible(_child) && Win32.GetCursorPos(out var p) && Win32.GetWindowRect(_child, out var r) &&
+        p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom;
 
     // Whether the cursor is over the shown video: the window under it is the child or mpv's window inside it, or the
     // top-level reports its client area at a point inside the child. Resize borders keep their own cursors.
