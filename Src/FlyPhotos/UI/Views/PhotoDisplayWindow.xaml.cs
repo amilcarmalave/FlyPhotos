@@ -451,6 +451,8 @@ public sealed partial class PhotoDisplayWindow
         SliderVideoPosition.RemoveHandler(UIElement.PointerCaptureLostEvent, _sliderCaptureLostHandler);
         SliderVideoVolume.ValueChanged -= SliderVideoVolume_ValueChanged;
         AppTitlebar.SizeChanged -= AppTitlebar_SizeChanged;
+        MainLayout.SizeChanged -= VideoRow_SizeChanged;
+        ButtonPanel.SizeChanged -= VideoRow_SizeChanged;
         _video.Dispose();
         _canvasController.Dispose();
         _thumbNailController.Dispose();
@@ -1401,6 +1403,10 @@ public sealed partial class PhotoDisplayWindow
                 _thumbNailController.RefreshThumbnail();
                 break;
             case Setting.ThumbnailShowHide:
+                // Hidden while a video plays: turning the strip on waits for the pause (which shows it); turning it
+                // off makes it the setting's to hide.
+                if (_stripHiddenForVideo && AppConfig.Settings.ShowThumbnails) break;
+                _stripHiddenForVideo = false;
                 _thumbNailController.ShowHideThumbnailBasedOnSettings();
                 break;
             case Setting.CheckeredBackgroundShowHide:
@@ -1624,6 +1630,8 @@ public sealed partial class PhotoDisplayWindow
         SliderVideoPosition.ValueChanged += SliderVideoPosition_ValueChanged;
         SliderVideoVolume.ValueChanged += SliderVideoVolume_ValueChanged;
         AppTitlebar.SizeChanged += AppTitlebar_SizeChanged;
+        MainLayout.SizeChanged += VideoRow_SizeChanged;
+        ButtonPanel.SizeChanged += VideoRow_SizeChanged;
         TxtTitleBarFileName.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(_windAppearanceManager.CaptionButtonForeground);
         UpdateMuteGlyph();
         UpdateVolumeSlider();
@@ -1637,23 +1645,68 @@ public sealed partial class PhotoDisplayWindow
     {
         var isVideo = _photoController.CurrentPhotoIsVideo;
         var photoOnly = isVideo ? Visibility.Collapsed : Visibility.Visible;
-        // Collapsing the focused button would send focus on to the next tab stop (Back, with a keyboard focus ring,
-        // and Space/Enter would then press it): hand it to the layout first, as the video's focus return does.
-        if (isVideo && Content?.XamlRoot is { } root && FocusManager.GetFocusedElement(root) is { } focused &&
-            (ReferenceEquals(focused, ButtonRotate) || ReferenceEquals(focused, ButtonScaleSet) ||
-             ReferenceEquals(focused, ButtonOneIsToOne) || ReferenceEquals(focused, ButtonPrevPage) ||
-             ReferenceEquals(focused, ButtonNextPage)))
+        // On a video no row button keeps focus: collapsing a focused photo-only button would send focus on to the next
+        // tab stop (Back, with a keyboard focus ring), and a focused Back/Next/… would be pressed by Enter. Hand it to
+        // the layout first, as the video's focus return does. Not while a button is held (press-and-hold flies).
+        if (isVideo && FocusedRowButton() is { IsPressed: false })
             MainLayout.Focus(FocusState.Programmatic);
         PanelVideoControls.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
         ButtonRotate.Visibility = photoOnly;
         ButtonScaleSet.Visibility = photoOnly;
         ButtonOneIsToOne.Visibility = photoOnly;
         UpdatePageButtonsVisibility();
+        FitVideoRow();
         UpdateFileNameVisibility();
         // A new item never starts with the strip hidden; it hides again once a video plays.
         UpdateStripForVideo();
         if (_video.State.Phase == VideoPhase.Idle) ResetVideoBar();
     }
+
+    // The button-row button (or toggle) that has focus, if any.
+    private ButtonBase? FocusedRowButton() =>
+        Content?.XamlRoot is { } root && FocusManager.GetFocusedElement(root) is ButtonBase button &&
+        ReferenceEquals(button.Parent, ButtonPanel) ? button : null;
+
+    private const double SeekSliderMaxWidth = 360, SeekSliderMinWidth = 48, SeekSliderWantedWidth = 120;
+    private bool _fittingVideoRow;
+
+    // The video row has to fit the window (it goes down to MinWindowWidth): the seek slider gives up width first
+    // (360 down to 120), then the volume slider goes (mute stays), then the time, then the seek slider shrinks on
+    // down to its minimum. Measured, not guessed: the rest of the row is the row's desired width minus the slider's.
+    private void FitVideoRow()
+    {
+        if (_fittingVideoRow || PanelVideoControls.Visibility != Visibility.Visible || MainLayout.ActualWidth <= 0) return;
+        _fittingVideoRow = true;
+        try
+        {
+            var available = MainLayout.ActualWidth - BorderButtonPanel.Padding.Left - BorderButtonPanel.Padding.Right - 16;
+            SliderVideoVolume.Visibility = Visibility.Visible;
+            TxtVideoTime.Visibility = Visibility.Visible;
+            var room = SeekSliderRoom(available);
+            if (room < SeekSliderWantedWidth)
+            {
+                SliderVideoVolume.Visibility = Visibility.Collapsed;
+                room = SeekSliderRoom(available);
+            }
+            if (room < SeekSliderWantedWidth)
+            {
+                TxtVideoTime.Visibility = Visibility.Collapsed;
+                room = SeekSliderRoom(available);
+            }
+            SliderVideoPosition.Width = Math.Clamp(room, SeekSliderMinWidth, SeekSliderMaxWidth);
+        }
+        finally { _fittingVideoRow = false; }
+    }
+
+    // How wide the seek slider can be: the space left once the rest of the row is laid out at its natural width.
+    private double SeekSliderRoom(double available)
+    {
+        ButtonPanel.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var rest = ButtonPanel.DesiredSize.Width - SliderVideoPosition.Width;
+        return Math.Floor(available - rest);
+    }
+
+    private void VideoRow_SizeChanged(object sender, SizeChangedEventArgs e) => FitVideoRow();
 
     // The file-name row on a photo, the title-bar name on a video; both only with the ShowFileName setting on.
     private void UpdateFileNameVisibility()
