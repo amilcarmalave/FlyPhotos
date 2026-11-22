@@ -283,6 +283,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
             IntPtr.Zero);
         if (_child == IntPtr.Zero)
             throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
+        HookParent();
 
         try
         {
@@ -324,10 +325,75 @@ internal sealed partial class VideoPlaybackController : IDisposable
         }
         catch
         {
+            UnhookParent();
             Win32.DestroyWindow(_child);
             _child = IntPtr.Zero;
             throw;
         }
+    }
+
+    // ---- cursor over the video ----
+    // The child is disabled (so it never takes focus), and nothing sets the cursor over it: it kept whatever shape it
+    // last had (the start-up wait wheel, or a resize arrow from crossing the window edge). WM_SETCURSOR bubbles from
+    // mpv's render window through the child to the top-level window, so the top-level is subclassed to answer it.
+
+    // Top-level window → (owner, original window proc). The entry stays after unhooking (Owner null) so a message
+    // already on its way still reaches the original proc. Touched only on the UI thread.
+    private static readonly Dictionary<IntPtr, (VideoPlaybackController Owner, IntPtr OldProc)> Subclassed = new();
+    private static readonly IntPtr ArrowCursor = Win32.LoadCursor(IntPtr.Zero, Win32.IDC_ARROW);
+
+    private unsafe void HookParent()
+    {
+        if (Subclassed.TryGetValue(_parent, out var entry) && entry.Owner != null) return;
+        delegate* unmanaged<IntPtr, uint, IntPtr, IntPtr, IntPtr> proc = &ParentProc;
+        if (entry.OldProc != IntPtr.Zero && Win32.GetWindowLongPtr(_parent, Win32.GWLP_WNDPROC) == (IntPtr)proc)
+        {
+            Subclassed[_parent] = (this, entry.OldProc); // still ours from an earlier hook
+            return;
+        }
+        var old = Win32.SetWindowLongPtr(_parent, Win32.GWLP_WNDPROC, (IntPtr)proc);
+        if (old == IntPtr.Zero)
+        {
+            Logger.Warn("Subclassing the window for the video cursor failed: {0}", Marshal.GetLastPInvokeError());
+            return;
+        }
+        Subclassed[_parent] = (this, old);
+    }
+
+    private void UnhookParent()
+    {
+        if (!Subclassed.TryGetValue(_parent, out var entry) || entry.Owner != this) return;
+        // Leave the proc in place (routing straight to the original) rather than restoring it: another subclass may
+        // have chained after ours, and restoring would cut it off.
+        Subclassed[_parent] = (null, entry.OldProc);
+    }
+
+    [UnmanagedCallersOnly]
+    private static IntPtr ParentProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (!Subclassed.TryGetValue(hwnd, out var entry)) return Win32.DefWindowProc(hwnd, msg, wParam, lParam);
+        try
+        {
+            if (msg == Win32.WM_SETCURSOR && entry.Owner != null && entry.Owner.IsOverVideo(wParam, lParam))
+            {
+                Win32.SetCursor(ArrowCursor);
+                return 1;
+            }
+        }
+        catch (Exception ex) { Logger.Warn(ex, "Video cursor hook failed"); }
+        return Win32.CallWindowProc(entry.OldProc, hwnd, msg, wParam, lParam);
+    }
+
+    // Whether the cursor is over the shown video: the window under it is the child or mpv's window inside it, or the
+    // top-level reports its client area at a point inside the child. Resize borders keep their own cursors.
+    private bool IsOverVideo(IntPtr hitWindow, IntPtr lParam)
+    {
+        if (_child == IntPtr.Zero || _disposed || !Win32.IsWindowVisible(_child)) return false;
+        if (hitWindow == _child || Win32.IsChild(_child, hitWindow)) return true;
+        var hit = (short)(lParam.ToInt64() & 0xFFFF);
+        if (hit != Win32.HTCLIENT && hit != Win32.HTNOWHERE && hit != Win32.HTERROR) return false;
+        return Win32.GetCursorPos(out var p) && Win32.GetWindowRect(_child, out var r) &&
+               p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom;
     }
 
     private void Load(string path)
@@ -364,6 +430,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
     {
         _focusTimer?.Stop();
         _focusTimer = null;
+        UnhookParent();
         var mpv = _mpv;
         _mpv = null;
         if (mpv != null)
@@ -600,6 +667,47 @@ internal sealed partial class VideoPlaybackController : IDisposable
 
         [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
         internal static partial IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string windowName);
+
+        internal const uint WM_SETCURSOR = 0x0020;
+        internal const short HTERROR = -2, HTNOWHERE = 0, HTCLIENT = 1;
+        internal const int GWLP_WNDPROC = -4;
+        internal const int IDC_ARROW = 32512;
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct POINT { public int X, Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RECT { public int Left, Top, Right, Bottom; }
+
+        [LibraryImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+        internal static partial IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+        [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+        internal static partial IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+        [LibraryImport("user32.dll", EntryPoint = "CallWindowProcW")]
+        internal static partial IntPtr CallWindowProc(IntPtr proc, IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+        internal static partial IntPtr DefWindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [LibraryImport("user32.dll", EntryPoint = "LoadCursorW")]
+        internal static partial IntPtr LoadCursor(IntPtr instance, int name);
+
+        [LibraryImport("user32.dll")]
+        internal static partial IntPtr SetCursor(IntPtr cursor);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool IsWindowVisible(IntPtr hwnd);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool GetCursorPos(out POINT point);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool GetWindowRect(IntPtr hwnd, out RECT rect);
 
         [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
         private static unsafe partial int GetClassName(IntPtr hwnd, char* buffer, int max);
