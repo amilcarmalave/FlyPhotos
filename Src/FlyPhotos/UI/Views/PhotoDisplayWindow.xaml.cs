@@ -12,6 +12,7 @@ using FlyPhotos.Core;
 using FlyPhotos.Core.Model;
 using FlyPhotos.Display.Controllers;
 using FlyPhotos.Display.State;
+using FlyPhotos.Display.Video;
 using FlyPhotos.Infra.Configuration;
 using FlyPhotos.Infra.Interop;
 using FlyPhotos.Infra.Localization;
@@ -142,6 +143,23 @@ public sealed partial class PhotoDisplayWindow
     private bool _isRightClickHeld;
     // Where the right button went down: the point the hold-zoom zooms around.
     private Point _rightClickPosition;
+    // Where the left button went down (raw DIPs), so a release can tell a click on the play glyph from a drag.
+    private Point _leftPressPosition;
+    // A press-to-release move longer than this (DIPs) is a drag, not a click on the play glyph.
+    private const double ClickSlop = 4;
+
+    // Plays the video on screen in a child window over the canvas. Stopped on every item change.
+    private readonly VideoPlaybackController _video;
+    // How many overlays (menus, flyouts, dialogs, the info panel, Settings, shell UI) are open. The video's child
+    // window covers any XAML under it, so while one is open the video is paused and hidden, and never started.
+    private int _openOverlays;
+    // Overlays opened by shell UI that reports no close (share, properties, the helper process's context menu):
+    // released when this window is activated again.
+    private readonly List<IDisposable> _overlaysUntilActivated = [];
+    // The overlays held by the settings window and the info panel while they are open.
+    private IDisposable? _settingsOverlay;
+    private IDisposable? _exifOverlay;
+    private readonly long _exifVisibilityToken;
 
     #endregion
 
@@ -249,6 +267,14 @@ public sealed partial class PhotoDisplayWindow
         _ctrlDragWindowMover = new CtrlDragWindowMover(D2dCanvas, AppWindow, enabled: true);
         _ctrlDragWindowMover.IsOnBackground = pos => !_canvasController.IsPressedOnImage(pos.AdjustForDpi(D2dCanvas));
         _windFullScreenManager.FullScreenToggled += WindFullScreenManager_FullScreenToggled;
+
+        _video = new VideoPlaybackController(this, D2dCanvas, AppTitlebar, BottomPanel, DispatcherQueue);
+        AppWindow.Changed += AppWindow_Changed;
+        MainLayout.PreviewKeyDown += HandlePreviewKeyDown;
+        TrackFlyoutOverlay(ButtonMoreMenuFlyout);
+        _exifVisibilityToken = ExifInfoPanel.RegisterPropertyChangedCallback(
+            UIElement.VisibilityProperty, ExifInfoPanel_VisibilityChanged);
+
         InitCommands();
         _videoSpike = Display.Video.VideoSpike.TryAttach(this, D2dCanvas, BottomPanel); // SPIKE
     }
@@ -277,7 +303,7 @@ public sealed partial class PhotoDisplayWindow
             [CommandId.DeletePhoto] = DeleteCurrentlyDisplayedPhoto,
             [CommandId.RenamePhoto] = ShowRenameFlyoutAsync,
             [CommandId.ShowInExplorer] = Act(OpenFileInExplorer),
-            [CommandId.SharePhoto] = Act(() => FileShareDialogService.ShareFile(this, _photoController.GetFullPathCurrentFile())),
+            [CommandId.SharePhoto] = Act(ShareCurrentFile),
             [CommandId.PrintPhoto] = Act(() => Util.PrintFile(_photoController.GetFullPathCurrentFile())),
             [CommandId.MoreActionsMenu] = ShowMoreMenuAsync,
 
@@ -319,8 +345,8 @@ public sealed partial class PhotoDisplayWindow
             [CommandId.ActualSize] = Act(() => _canvasController.ZoomToHundred()),
 
             // File properties
-            [CommandId.FileProperties] = Act(() => Util.ShowFileProperties(_photoController.GetFullPathCurrentFile())),
-            [CommandId.FileDetails] = Act(() => Util.ShowFileProperties(_photoController.GetFullPathCurrentFile(), true)),
+            [CommandId.FileProperties] = Act(() => ShowFileProperties(details: false)),
+            [CommandId.FileDetails] = Act(() => ShowFileProperties(details: true)),
             [CommandId.PhotoInfoPanel] = Act(() => ExifInfoPanel.Toggle(_photoController.GetFullPathCurrentFile())),
 
             // External apps
@@ -328,7 +354,15 @@ public sealed partial class PhotoDisplayWindow
             [CommandId.OpenWithApp1] = () => LaunchExternalAppAsync(0),
             [CommandId.OpenWithApp2] = () => LaunchExternalAppAsync(1),
             [CommandId.OpenWithApp3] = () => LaunchExternalAppAsync(2),
-            [CommandId.OpenWithApp4] = () => LaunchExternalAppAsync(3)
+            [CommandId.OpenWithApp4] = () => LaunchExternalAppAsync(3),
+
+            // Video: each one is a no-op unless the item on screen is a video
+            [CommandId.VideoPlayPause] = Act(VideoPlayPause),
+            [CommandId.VideoSeekForward] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.Seek(VideoSeekSeconds); }),
+            [CommandId.VideoSeekBack] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.Seek(-VideoSeekSeconds); }),
+            [CommandId.VideoVolumeUp] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ChangeVolume(VideoVolumeStep); }),
+            [CommandId.VideoVolumeDown] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ChangeVolume(-VideoVolumeStep); }),
+            [CommandId.VideoMute] = Act(() => { if (_photoController.CurrentPhotoIsVideo) _video.ToggleMute(); })
         };
 
 #if DEBUG
@@ -369,7 +403,9 @@ public sealed partial class PhotoDisplayWindow
         _edgeNavArrowFader.Enabled = false;
 
         AppWindow.Closing -= PhotoDisplayWindow_Closing;
+        AppWindow.Changed -= AppWindow_Changed;
         Activated -= PhotoDisplayWindow_Activated;
+        ExifInfoPanel.UnregisterPropertyChangedCallback(UIElement.VisibilityProperty, _exifVisibilityToken);
 
         _photoController.FirstPhotoLoaded -= OnFirstPhotoLoaded;
         _photoController.CacheStatusChanged -= PhotoController_CacheStatusChanged;
@@ -396,6 +432,7 @@ public sealed partial class PhotoDisplayWindow
         D2dCanvasThumbNail.PointerWheelChanged -= ThumbNail_PointerWheelChanged;
 
         MainLayout.Loaded -= MainLayout_Loaded;
+        MainLayout.PreviewKeyDown -= HandlePreviewKeyDown;
         MainLayout.KeyDown -= HandleKeyDown;
         MainLayout.KeyUp -= HandleKeyUp;
 
@@ -403,6 +440,8 @@ public sealed partial class PhotoDisplayWindow
         _windAppearanceManager.CaptionButtonForegroundChanged -= WindAppearanceManager_CaptionButtonForegroundChanged;
         _captionScrimFader.Dispose();
 
+        // Before the canvas: the player's child window sits over it and tracks its layout.
+        _video.Dispose();
         _canvasController.Dispose();
         _thumbNailController.Dispose();
         _photoController.Dispose();
@@ -506,6 +545,8 @@ public sealed partial class PhotoDisplayWindow
     {
         if (_isClosing) return; // A second Esc / click-outside during the exit animation.
         _isClosing = true;
+        // Silence at once, and uncover the canvas for the exit animation.
+        _video.Stop();
         _settingWindow?.Close();
 
         if (AppConfig.Settings.OpenExitZoom)
@@ -562,11 +603,27 @@ public sealed partial class PhotoDisplayWindow
     #region Keyboard Input
 
     // Runs the command bound to the pressed chord. A navigation command remembers its key, so key-up ends the burst.
-    private async void HandleKeyDown(object sender, KeyRoutedEventArgs e)
+    private void HandleKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_routes.TryGetValue(KeyChord.FromCurrentModifiers(e.Key), out var id)) RunKeyCommand(id, e);
+    }
+
+    /// <summary>
+    /// Play/pause is taken on the way down, before the focused element sees the key: a focused button presses on
+    /// Space in its own key-down handling, ahead of the bubbling KeyDown above, so Space would click it (Next, say)
+    /// whatever that handler then marked. Handled here, the key never reaches the button, and KeyDown never runs it
+    /// a second time.
+    /// </summary>
+    private void HandlePreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_routes.TryGetValue(KeyChord.FromCurrentModifiers(e.Key), out var id) && id == CommandId.VideoPlayPause)
+            RunKeyCommand(id, e);
+    }
+
+    private async void RunKeyCommand(CommandId id, KeyRoutedEventArgs e)
     {
         try
         {
-            if (!_routes.TryGetValue(KeyChord.FromCurrentModifiers(e.Key), out var id)) return;
             if (!_commands.TryGetValue(id, out var action)) return;
 
             // Set before awaiting: an async handler suspends here and the routed event finishes
@@ -612,7 +669,12 @@ public sealed partial class PhotoDisplayWindow
     /// </summary>
     private async void PhotoDisplayWindow_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (args.WindowActivationState != WindowActivationState.Deactivated || _burstKey == VirtualKey.None) return;
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            ReleaseOverlaysUntilActivated();
+            return;
+        }
+        if (_burstKey == VirtualKey.None) return;
         await EndBurstAsync();
     }
 
@@ -735,6 +797,7 @@ public sealed partial class PhotoDisplayWindow
         var dpiAdjustedPos = pointerPoint.Position.AdjustForDpi(D2dCanvas);
         var updateKind = pointerPoint.Properties.PointerUpdateKind;
         _lastPointerDownKind = updateKind;
+        if (updateKind == PointerUpdateKind.LeftButtonPressed) _leftPressPosition = pointerPoint.Position;
         var pointerOverImage = _canvasController.IsPressedOnImage(dpiAdjustedPos);
 
         switch (updateKind)
@@ -803,7 +866,20 @@ public sealed partial class PhotoDisplayWindow
                 {
                     var filePath = _photoController.GetFullPathCurrentFile();
                     if (File.Exists(filePath))
-                        ContextMenuHelper.ShowContextMenu(this, filePath);
+                        ShowContextMenu(filePath);
+                }
+                break;
+
+            // A click (not a drag) on a video still's play glyph. A press on the image also starts a pan drag, so
+            // this comes before the drag case and ends that drag too.
+            case PointerUpdateKind.LeftButtonReleased
+                when e.Pointer.PointerDeviceType != PointerDeviceType.Touch
+                     && IsClick(_leftPressPosition, currentPoint.Position)
+                     && TryPlayFromGlyph(currentPoint.Position):
+                if (_isDragging)
+                {
+                    D2dCanvas.ReleasePointerCapture(e.Pointer);
+                    _isDragging = false;
                 }
                 break;
 
@@ -904,11 +980,24 @@ public sealed partial class PhotoDisplayWindow
         }
     }
 
-    // A touch tap: the touch version of a click outside the image.
+    // A touch tap: the touch version of a click on the play glyph, else of a click outside the image.
     private void D2dCanvas_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        if (e.PointerDeviceType == PointerDeviceType.Touch)
-            HandleClickOutside(e.GetPosition(D2dCanvas));
+        if (e.PointerDeviceType != PointerDeviceType.Touch) return;
+        var position = e.GetPosition(D2dCanvas);
+        if (!TryPlayFromGlyph(position))
+            HandleClickOutside(position);
+    }
+
+    private static bool IsClick(Point pressed, Point released) =>
+        Math.Abs(released.X - pressed.X) <= ClickSlop && Math.Abs(released.Y - pressed.Y) <= ClickSlop;
+
+    // Plays the video on screen if rawPosition (canvas DIPs, not DPI-adjusted) is on its still's play glyph.
+    private bool TryPlayFromGlyph(Point rawPosition)
+    {
+        if (!_photoController.CurrentPhotoIsVideo || !_canvasController.IsOnPlayGlyph(rawPosition)) return false;
+        if (_openOverlays == 0) _video.Play(_photoController.GetFullPathCurrentFile());
+        return true;
     }
 
     // Mouse/pen manipulations are completed at once, so ManipulationDelta only ever sees touch.
@@ -1075,14 +1164,12 @@ public sealed partial class PhotoDisplayWindow
     private void MenuItemPrint_OnClick(object sender, RoutedEventArgs e) =>
         Util.PrintFile(_photoController.GetFullPathCurrentFile());
 
-    private void MenuItemShare_OnClick(object sender, RoutedEventArgs e) =>
-        FileShareDialogService.ShareFile(this, _photoController.GetFullPathCurrentFile());
+    private void MenuItemShare_OnClick(object sender, RoutedEventArgs e) => ShareCurrentFile();
 
     private void MenuItemPhotoInfo_OnClick(object sender, RoutedEventArgs e) =>
         ExifInfoPanel.Toggle(_photoController.GetFullPathCurrentFile());
 
-    private void MenuItemFileInfo_OnClick(object sender, RoutedEventArgs e) =>
-        Util.ShowFileProperties(_photoController.GetFullPathCurrentFile());
+    private void MenuItemFileInfo_OnClick(object sender, RoutedEventArgs e) => ShowFileProperties(details: false);
 
     private void MenuItemOpenFileLocation_OnClick(object sender, RoutedEventArgs e) =>
         OpenFileInExplorer();
@@ -1142,6 +1229,7 @@ public sealed partial class PhotoDisplayWindow
     private ShortcutsFlyoutControl CreateShortcutsControl()
     {
         var control = new ShortcutsFlyoutControl();
+        TrackFlyoutOverlay(control.Flyout);
         control.AppLaunchRequested += app => _ = app.LaunchAsync(_photoController.GetFullPathCurrentFile());
         return control;
     }
@@ -1204,7 +1292,8 @@ public sealed partial class PhotoDisplayWindow
             preExecuteFailed: () => _canvasController.Shrug(),
             anchorProvider:   () => BorderButtonPanel,
             filePathProvider: _photoController.GetFullPathCurrentFile,
-            execute:          _photoController.RenameCurrentPhoto);
+            execute:          _photoController.RenameCurrentPhoto,
+            flyoutCreated:    TrackFlyoutOverlay);
         return _fileActionRename.ExecuteAsync();
     }
 
@@ -1234,7 +1323,8 @@ public sealed partial class PhotoDisplayWindow
             execute: _photoController.DeleteCurrentPhoto,
             executeFailed: () => _canvasController.Shrug(),
             postExecute: () => Task.CompletedTask,                 // no-op today
-            postExecuteLastItem: AnimatePhotoDisplayWindowClose);
+            postExecuteLastItem: AnimatePhotoDisplayWindowClose,
+            dialogScope: VideoOverlay);
 
         return _fileActionDelete.ExecuteAsync();
     }
@@ -1252,6 +1342,7 @@ public sealed partial class PhotoDisplayWindow
             _settingWindow.Closed += SettingWindow_Closed;
             _settingWindow.SettingChanged += SettingWindow_SettingChanged;
             _settingWindow.Initialize(Util.GetMonitorForWindow(this));
+            _settingsOverlay = VideoOverlay();
         }
         _settingWindow.Activate();
     }
@@ -1264,6 +1355,8 @@ public sealed partial class PhotoDisplayWindow
             _settingWindow.SettingChanged -= SettingWindow_SettingChanged;
         }
         _settingWindow = null;
+        _settingsOverlay?.Dispose();
+        _settingsOverlay = null;
     }
 
     // A setting changed in the settings window (already stored in AppConfig.Settings): passes it on to whatever
@@ -1359,6 +1452,8 @@ public sealed partial class PhotoDisplayWindow
         DispatcherQueue.TryEnqueue(() =>
         {
             var currentFilePath = _photoController.GetFullPathCurrentFile();
+            // Every item change ends here (navigation, delete, rename, Folder mode changes, folder switches).
+            if (_video.State.Path != null && currentFilePath != _video.State.Path) _video.Stop();
             ExifInfoPanel.CloseIfFileChanged(currentFilePath);
             CloseRenameFlyoutIfFileChanged(currentFilePath);
             TxtFileName.Text = fileDisplayDetails.DisplayText;
@@ -1401,6 +1496,119 @@ public sealed partial class PhotoDisplayWindow
     // CanvasController raises this on the UI thread once a page navigation settled, so the filename
     // bar can pick up the new page's size and index.
     private void CanvasController_OnPageChanged() => _photoController.UpdateFileNameAndDetails();
+
+    #endregion
+
+    #region Video
+
+    private const double VideoSeekSeconds = 5;
+    private const int VideoVolumeStep = 5;
+
+    // Space: starts the video on screen, or pauses/resumes it. Nothing on a photo, or while an overlay is open (the
+    // video could not be seen under it).
+    private void VideoPlayPause()
+    {
+        if (!_photoController.CurrentPhotoIsVideo || _openOverlays > 0) return;
+        var path = _photoController.GetFullPathCurrentFile();
+        if (_video.State.Phase == VideoPhase.Idle || _video.State.Path != path)
+            _video.Play(path);
+        else
+            _video.TogglePause();
+    }
+
+    /// <summary>
+    /// Marks an overlay open until the returned scope is disposed (once; later calls do nothing). The first open
+    /// overlay pauses and hides the video; it reappears, still paused, when the last one closes.
+    /// </summary>
+    private IDisposable VideoOverlay()
+    {
+        if (_openOverlays++ == 0) _video.OverlayOpened();
+        return new OverlayScope(this);
+    }
+
+    private sealed class OverlayScope(PhotoDisplayWindow window) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (--window._openOverlays == 0) window._video.OverlayClosed();
+        }
+    }
+
+    // A flyout or menu counts as an overlay from Opening (before it shows, so it never appears behind the video)
+    // to Closed, however it was opened or dismissed.
+    private void TrackFlyoutOverlay(FlyoutBase flyout)
+    {
+        IDisposable? scope = null;
+        flyout.Opening += (_, _) => scope ??= VideoOverlay();
+        flyout.Closed += (_, _) =>
+        {
+            scope?.Dispose();
+            scope = null;
+        };
+    }
+
+    // The info panel docks over the right of the photo area: an overlay while it is visible, whoever showed or hid it.
+    private void ExifInfoPanel_VisibilityChanged(DependencyObject sender, DependencyProperty dp)
+    {
+        if (ExifInfoPanel.Visibility == Visibility.Visible)
+        {
+            _exifOverlay ??= VideoOverlay();
+        }
+        else
+        {
+            _exifOverlay?.Dispose();
+            _exifOverlay = null;
+        }
+    }
+
+    // For shell UI that reports no close: it takes activation from this window, so the overlay ends when this window
+    // is activated again.
+    private void HoldOverlayUntilActivated() => _overlaysUntilActivated.Add(VideoOverlay());
+
+    private void ReleaseOverlaysUntilActivated()
+    {
+        if (_overlaysUntilActivated.Count == 0) return;
+        foreach (var scope in _overlaysUntilActivated) scope.Dispose();
+        _overlaysUntilActivated.Clear();
+    }
+
+    private void ShareCurrentFile()
+    {
+        HoldOverlayUntilActivated();
+        FileShareDialogService.ShareFile(this, _photoController.GetFullPathCurrentFile());
+    }
+
+    private void ShowFileProperties(bool details)
+    {
+        var path = _photoController.GetFullPathCurrentFile();
+        if (!File.Exists(path)) return; // ShowFileProperties opens nothing, so nothing would reactivate us
+        HoldOverlayUntilActivated();
+        Util.ShowFileProperties(path, details);
+    }
+
+    // In process the shell menu is modal (TrackPopupMenuEx returns when it closes); the helper process shows it
+    // fire-and-forget, taking activation while it is up.
+    private void ShowContextMenu(string filePath)
+    {
+        if (AppConfig.Settings.UseExternalExeForContextMenu)
+        {
+            HoldOverlayUntilActivated();
+            ContextMenuHelper.ShowContextMenu(this, filePath);
+            return;
+        }
+        using (VideoOverlay()) ContextMenuHelper.ShowContextMenu(this, filePath);
+    }
+
+    // Minimizing pauses the video, so it never plays on unseen.
+    private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (sender.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized })
+            _video.Minimized();
+    }
 
     #endregion
 

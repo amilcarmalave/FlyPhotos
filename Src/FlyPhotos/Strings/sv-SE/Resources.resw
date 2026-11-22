@@ -1285,4 +1285,25 @@ High Quality Cubic – Skalning med högsta kvalitet för foton.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Endast i mappläge: öppnar föregående mapp i den överordnade mappen</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Spela upp / pausa video</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Hoppa framåt 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Hoppa bakåt 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Höj volymen</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Sänk volymen</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Ljud av / på</value>
+  </data>
 </root>

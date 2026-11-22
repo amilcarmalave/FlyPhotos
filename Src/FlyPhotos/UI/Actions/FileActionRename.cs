@@ -2,6 +2,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using FlyPhotos.Core.Model;
 using FlyPhotos.UI.Controls;
 
@@ -21,6 +22,8 @@ internal class FileActionRename
     private readonly Func<FrameworkElement> _anchorProvider;
     private readonly Func<string> _filePathProvider;
     private readonly Func<string, Task<RenameResult>> _execute;
+    // Handed the rename flyout once it exists, so the host can follow it opening and closing.
+    private readonly Action<FlyoutBase>? _flyoutCreated;
 
     private RenameFlyoutControl? _control;
 
@@ -29,13 +32,15 @@ internal class FileActionRename
         Action preExecuteFailed,
         Func<FrameworkElement> anchorProvider,
         Func<string> filePathProvider,
-        Func<string, Task<RenameResult>> execute)
+        Func<string, Task<RenameResult>> execute,
+        Action<FlyoutBase>? flyoutCreated = null)
     {
         _preExecute = preExecute;
         _preExecuteFailed = preExecuteFailed;
         _anchorProvider = anchorProvider;
         _filePathProvider = filePathProvider;
         _execute = execute;
+        _flyoutCreated = flyoutCreated;
     }
 
     public Task ExecuteAsync()
@@ -59,6 +64,7 @@ internal class FileActionRename
     {
         var control = new RenameFlyoutControl();
         control.RenameRequested += _execute;
+        _flyoutCreated?.Invoke(control.Flyout);
         return control;
     }
 }

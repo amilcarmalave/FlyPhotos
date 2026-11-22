@@ -684,6 +684,10 @@ internal partial class PhotoDisplayController
     public bool CurrentPhotoIsRaw =>
         _photoList.GetPhoto(_nav.Key) is { IsRaw: true };
 
+    /// <summary>Whether the on-screen item is a video. Lock-free read; safe to call cross-thread.</summary>
+    public bool CurrentPhotoIsVideo =>
+        _photoList.GetPhoto(_nav.Key) is { IsVideo: true };
+
     // --- For tests: the state the invariants are checked against (DisplayHarness). UI thread. ---
 
     /// <summary>The prefetch cache (tests step it by hand).</summary>

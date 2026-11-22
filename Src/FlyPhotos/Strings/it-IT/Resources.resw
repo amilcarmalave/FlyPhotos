@@ -1285,4 +1285,25 @@ High Quality Cubic – Ridimensionamento della massima qualità per le foto.</va
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Solo in modalità Cartella: apre la cartella precedente nella cartella superiore</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Riproduci / metti in pausa il video</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Avanti di 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Indietro di 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Alza il volume</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Abbassa il volume</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Disattiva / riattiva audio</value>
+  </data>
 </root>

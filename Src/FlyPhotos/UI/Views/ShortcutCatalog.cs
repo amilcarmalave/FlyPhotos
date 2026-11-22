@@ -207,7 +207,8 @@ public enum CommandId
     FileProperties, FileDetails,
     OpenWithApp1, OpenWithApp2, OpenWithApp3, OpenWithApp4, OpenWithPanel,
     MoreActionsMenu,
-    NextFolder, PrevFolder
+    NextFolder, PrevFolder,
+    VideoPlayPause, VideoSeekForward, VideoSeekBack, VideoVolumeUp, VideoVolumeDown, VideoMute
 }
 
 /// <summary>
@@ -476,6 +477,17 @@ internal static class ShortcutCatalog
             Row(CommandId.OpenWithApp4, "\uE8A7", None,
                 [K(VirtualKey.Number4, ctrl: true), K(VirtualKey.NumberPad4, ctrl: true)]),
             Row(CommandId.OpenWithPanel, "\uE71D", None, K(VirtualKey.E))
+        ]),
+
+        // No-ops on a photo. Suppress on Space: it would also click whatever button has focus.
+        ("Video",
+        [
+            Row(CommandId.VideoPlayPause, "\uE768", Suppress, K(VirtualKey.Space)),
+            Row(CommandId.VideoSeekForward, "\uEB9D", Repeat, K(VirtualKey.Right, shift: true)),
+            Row(CommandId.VideoSeekBack, "\uED3C", Repeat, K(VirtualKey.Left, shift: true)),
+            Row(CommandId.VideoVolumeUp, "\uE995", Repeat, K(VirtualKey.Up, shift: true)),
+            Row(CommandId.VideoVolumeDown, "\uE993", Repeat, K(VirtualKey.Down, shift: true)),
+            Row(CommandId.VideoMute, "\uE74F", None)
         ])
     ];
 
@@ -483,6 +495,10 @@ internal static class ShortcutCatalog
         Table.SelectMany(g => g.Rows).ToDictionary(r => r.Id);
 
     public static bool Has(CommandId id, CommandFlags flag) => (ById[id].Flags & flag) != 0;
+
+    /// <summary>The chords a command ships with, before any user override. Empty for a command with none.</summary>
+    public static IReadOnlyList<KeyChord> DefaultChords(CommandId id) =>
+        ById.TryGetValue(id, out var def) ? def.Chords : [];
 
     /// <summary>Every command, in display order, already carrying whatever the user saved. Builds
     /// the display strings, so call it only from the settings window - never on the photo window's

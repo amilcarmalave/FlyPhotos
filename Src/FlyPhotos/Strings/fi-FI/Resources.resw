@@ -1285,4 +1285,25 @@ High Quality Cubic – Korkealaatuisin skaalaus valokuville.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Vain kansiotilassa: avaa yläkansion edellisen kansion</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Toista / keskeytä video</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Siirry eteenpäin 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Siirry taaksepäin 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Äänenvoimakkuus ylös</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Äänenvoimakkuus alas</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Mykistä / poista mykistys</value>
+  </data>
 </root>

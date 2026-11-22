@@ -1282,4 +1282,25 @@ High Quality Cubic – ഫോട്ടോകൾക്ക് ഏറ്റവു�
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>ഫോൾഡർ മോഡിൽ മാത്രം: പാരന്റ് ഫോൾഡറിലെ മുമ്പത്തെ ഫോൾഡർ തുറക്കുന്നു</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>വീഡിയോ</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>വീഡിയോ പ്ലേ / താൽക്കാലികമായി നിർത്തുക</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>5 സെ. മുന്നോട്ട്</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>5 സെ. പിന്നോട്ട്</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>ശബ്ദം കൂട്ടുക</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>ശബ്ദം കുറയ്ക്കുക</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>നിശബ്ദമാക്കുക / ശബ്ദം ഓണാക്കുക</value>
+  </data>
 </root>

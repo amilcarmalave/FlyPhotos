@@ -1285,4 +1285,25 @@ High Quality Cubic – Schaling van de hoogste kwaliteit voor foto's.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Alleen in mapmodus: opent de vorige map in de bovenliggende map</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Video afspelen / pauzeren</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>5 s vooruit</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>5 s terug</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Volume omhoog</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Volume omlaag</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Dempen / dempen opheffen</value>
+  </data>
 </root>

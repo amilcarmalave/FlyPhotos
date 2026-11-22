@@ -1285,4 +1285,25 @@ High Quality Cubic – Escalado de la más alta calidad para fotos.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Solo en modo Carpeta: abre la carpeta anterior dentro de la carpeta principal</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Vídeo</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Reproducir / pausar vídeo</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Avanzar 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Retroceder 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Subir volumen</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Bajar volumen</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Silenciar / activar sonido</value>
+  </data>
 </root>

@@ -25,8 +25,11 @@ public sealed partial class RenameFlyoutControl : UserControl
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    private Flyout? _flyout;
+    private readonly Flyout _flyout;
     private string? _targetPath;
+
+    /// <summary>The flyout this control lives in, for a host that has to know when it opens and closes.</summary>
+    internal FlyoutBase Flyout => _flyout;
 
     /// <summary>Host performs the rename for the given new file name and returns the result.</summary>
     internal event Func<string, Task<RenameResult>>? RenameRequested;
@@ -36,6 +39,8 @@ public sealed partial class RenameFlyoutControl : UserControl
         InitializeComponent();
         RtlLayoutBehavior.ApplyFlowDirection(this, AppConfig.Settings.Language);
         RenameOkButton.Content = L.Get("RenameFlyout/OkButton");
+        _flyout = new Flyout { Content = this, Placement = FlyoutPlacementMode.Top };
+        _flyout.Opened += (_, _) => RenameTextBox.SelectAll();
     }
 
     public void Show(FrameworkElement anchor, string filePath)
@@ -43,12 +48,6 @@ public sealed partial class RenameFlyoutControl : UserControl
         _targetPath = filePath;
         RenameTextBox.Text = Path.GetFileNameWithoutExtension(filePath);
         RenameExtensionText.Text = Path.GetExtension(filePath);
-
-        if (_flyout == null)
-        {
-            _flyout = new Flyout { Content = this, Placement = FlyoutPlacementMode.Top };
-            _flyout.Opened += (_, _) => RenameTextBox.SelectAll();
-        }
         _flyout.ShowAt(anchor);
     }
 
@@ -59,7 +58,7 @@ public sealed partial class RenameFlyoutControl : UserControl
     {
         if (_targetPath != null &&
             !string.Equals(_targetPath, currentFilePath, StringComparison.OrdinalIgnoreCase))
-            _flyout?.Hide();
+            _flyout.Hide();
     }
 
     private async void RenameOk_OnClick(object sender, RoutedEventArgs e) => await TrySubmitAsync();
@@ -78,7 +77,7 @@ public sealed partial class RenameFlyoutControl : UserControl
 
         if (newStem.Length == 0 || newStem == currentStem)
         {
-            _flyout?.Hide();
+            _flyout.Hide();
             return;
         }
         if (newStem.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
@@ -95,7 +94,7 @@ public sealed partial class RenameFlyoutControl : UserControl
 
         if (result.Success)
         {
-            _flyout?.Hide();
+            _flyout.Hide();
         }
         else
         {

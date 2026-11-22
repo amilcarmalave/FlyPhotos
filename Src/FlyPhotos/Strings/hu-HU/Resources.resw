@@ -1284,4 +1284,25 @@ High Quality Cubic – A legjobb minőségű méretezés fotókhoz.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Csak mappa módban: megnyitja a szülőmappa előző mappáját</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Videó</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Videó lejátszása / szüneteltetése</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Ugrás előre 5 mp-et</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Ugrás vissza 5 mp-et</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Hangerő fel</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Hangerő le</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Némítás / némítás feloldása</value>
+  </data>
 </root>

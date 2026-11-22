@@ -26,6 +26,8 @@ internal class FileActionDelete
     private readonly Action _executeFailed;
     private readonly Func<Task> _postExecute;
     private readonly Func<Task> _postExecuteLastItem;
+    // Held for as long as each dialog is open, so the host can treat it as an overlay.
+    private readonly Func<IDisposable>? _dialogScope;
 
     public FileActionDelete(
         Func<XamlRoot?> xamlRootProvider,
@@ -34,7 +36,8 @@ internal class FileActionDelete
         Func<Task<DeleteResult>> execute,
         Action executeFailed,
         Func<Task> postExecute,
-        Func<Task> postExecuteLastItem)
+        Func<Task> postExecuteLastItem,
+        Func<IDisposable>? dialogScope = null)
     {
         _xamlRootProvider = xamlRootProvider;
         _preExecute = preExecute;
@@ -43,6 +46,7 @@ internal class FileActionDelete
         _executeFailed = executeFailed;
         _postExecute = postExecute;
         _postExecuteLastItem = postExecuteLastItem;
+        _dialogScope = dialogScope;
     }
 
     public async Task ExecuteAsync()
@@ -70,7 +74,8 @@ internal class FileActionDelete
                 DefaultButton = ContentDialogButton.Close
             };
 
-            var dialogResult = await confirmDialog.ShowAsync();
+            ContentDialogResult dialogResult;
+            using (_dialogScope?.Invoke()) dialogResult = await confirmDialog.ShowAsync();
             if (dialogResult != ContentDialogResult.Primary)
             {
                 Logger.Info("User cancelled file deletion.");
@@ -101,7 +106,7 @@ internal class FileActionDelete
                 Content = $"{L.Get("DeletionFailed/Message")}{Environment.NewLine}{result.FailMessage}",
                 CloseButtonText = L.Get("DeletionFailed/CloseButton")
             };
-            await errorDialog.ShowAsync();
+            using (_dialogScope?.Invoke()) await errorDialog.ShowAsync();
         }
     }
 }

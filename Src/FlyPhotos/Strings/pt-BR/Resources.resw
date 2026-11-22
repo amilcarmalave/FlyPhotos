@@ -1285,4 +1285,25 @@ High Quality Cubic – Dimensionamento de alta qualidade para fotos.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Somente no modo Pasta: abre a pasta anterior dentro da pasta pai</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Vídeo</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Reproduzir / pausar vídeo</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Avançar 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Voltar 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Aumentar volume</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Diminuir volume</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Silenciar / ativar som</value>
+  </data>
 </root>

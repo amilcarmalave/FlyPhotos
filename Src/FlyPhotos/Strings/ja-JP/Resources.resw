@@ -1284,4 +1284,25 @@ High Quality Cubic – 写真に最適な最高品質のスケーリングです
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>フォルダー モードのみ: 親フォルダー内の前のフォルダーを開きます</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>ビデオ</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>ビデオの再生 / 一時停止</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>5 秒進む</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>5 秒戻る</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>音量を上げる</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>音量を下げる</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>ミュート / ミュート解除</value>
+  </data>
 </root>

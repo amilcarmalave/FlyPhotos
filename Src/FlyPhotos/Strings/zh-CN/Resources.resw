@@ -1285,4 +1285,25 @@ High Quality Cubic – 适合照片的最高质量缩放。</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>仅限文件夹模式：打开父文件夹中的上一个文件夹</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>视频</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>播放/暂停视频</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>快进 5 秒</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>快退 5 秒</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>调高音量</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>调低音量</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>静音/取消静音</value>
+  </data>
 </root>

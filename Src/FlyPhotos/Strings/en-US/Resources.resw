@@ -1285,4 +1285,25 @@ High Quality Cubic – Highest-quality scaling for photos.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Folder mode only: opens the previous folder in the parent folder</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Play / pause video</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>Skip forward 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>Skip back 5 s</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Volume up</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Volume down</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Mute / unmute</value>
+  </data>
 </root>

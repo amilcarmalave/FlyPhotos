@@ -18,7 +18,10 @@ namespace FlyPhotos.UI.Controls;
 /// </summary>
 public sealed partial class ShortcutsFlyoutControl : UserControl
 {
-    private Flyout? _flyout;
+    private readonly Flyout _flyout;
+
+    /// <summary>The flyout this control lives in, for a host that has to know when it opens and closes.</summary>
+    internal FlyoutBase Flyout => _flyout;
 
     /// <summary>Raised with the app whose button was clicked. The host performs the launch.</summary>
     public event Action<InstalledApp>? AppLaunchRequested;
@@ -27,6 +30,7 @@ public sealed partial class ShortcutsFlyoutControl : UserControl
     {
         InitializeComponent();
         RtlLayoutBehavior.ApplyFlowDirection(this, AppConfig.Settings.Language);
+        _flyout = new Flyout { Content = this, Placement = FlyoutPlacementMode.Top };
     }
 
     public void Show(FrameworkElement anchor, IReadOnlyList<InstalledApp?> apps)
@@ -45,7 +49,6 @@ public sealed partial class ShortcutsFlyoutControl : UserControl
         if (ShortcutsPanel.Children.Count == 0)
             ShortcutsPanel.Children.Add(new TextBlock { Text = L.Get("NoShortcutsCreated/Message") });
 
-        _flyout ??= new Flyout { Content = this, Placement = FlyoutPlacementMode.Top };
         _flyout.ShowAt(anchor);
     }
 
@@ -53,6 +56,6 @@ public sealed partial class ShortcutsFlyoutControl : UserControl
     {
         if (sender is FrameworkElement { Tag: InstalledApp app })
             AppLaunchRequested?.Invoke(app);
-        _flyout?.Hide();
+        _flyout.Hide();
     }
 }

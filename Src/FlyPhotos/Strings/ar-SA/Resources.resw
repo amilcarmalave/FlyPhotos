@@ -1285,4 +1285,25 @@ High Quality Cubic – تحجيم بأعلى جودة للصور.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>في وضع المجلد فقط: يفتح المجلد السابق داخل المجلد الأصل</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>فيديو</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>تشغيل / إيقاف الفيديو مؤقتًا</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>تقديم 5 ث</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>ترجيع 5 ث</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>رفع مستوى الصوت</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>خفض مستوى الصوت</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>كتم / إلغاء كتم الصوت</value>
+  </data>
 </root>

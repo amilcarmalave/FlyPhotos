@@ -1285,4 +1285,25 @@ High Quality Cubic – Skalierung mit höchster Qualität für Fotos.</value>
   <data name="ShortcutDesc_PrevFolder" xml:space="preserve">
     <value>Nur im Ordnermodus: öffnet den vorherigen Ordner im übergeordneten Ordner</value>
   </data>
+  <data name="ShortcutGroup_Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShortcutName_VideoPlayPause" xml:space="preserve">
+    <value>Video abspielen / pausieren</value>
+  </data>
+  <data name="ShortcutName_VideoSeekForward" xml:space="preserve">
+    <value>5 s vorspulen</value>
+  </data>
+  <data name="ShortcutName_VideoSeekBack" xml:space="preserve">
+    <value>5 s zurückspulen</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeUp" xml:space="preserve">
+    <value>Lauter</value>
+  </data>
+  <data name="ShortcutName_VideoVolumeDown" xml:space="preserve">
+    <value>Leiser</value>
+  </data>
+  <data name="ShortcutName_VideoMute" xml:space="preserve">
+    <value>Stummschalten / Ton an</value>
+  </data>
 </root>
