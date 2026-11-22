@@ -1,6 +1,7 @@
 #nullable enable
 using FlyPhotos.Core.Model;
 using FlyPhotos.Display.ImageReading;
+using FlyPhotos.Infra.Configuration;
 using FlyPhotos.Infra.Interop;
 using ImageMagick;
 using System;
@@ -148,6 +149,8 @@ internal static class CodecDiscovery
             new() { FriendlyName = "DDS Decoder", Type = "Fly", FileExtensions = [".dds"] },
             new() { FriendlyName = "PDF Decoder", Type = "Fly", FileExtensions = [".pdf"] }
         };
+        if (VideoFormats.LibMpvPresent && (AppConfig.Settings?.ShowVideos ?? true))
+            list.Add(new() { FriendlyName = "Video (mpv)", Type = "Fly", FileExtensions = [.. VideoFormats.Extensions] });
         return list;
     }
 
@@ -238,7 +241,7 @@ internal static class CodecDiscovery
         ".Ico", ".Icon", ".Iiq", ".Inline", ".Ipl", ".J2c", ".J2k", ".Jng", ".Jnx", ".Jp2",
         ".Jpc", ".Jpe", ".Jpeg", ".Jpg", ".Jpm", ".Jps", ".Jpt", ".Jxl", ".K", ".K25",
         ".Kdc", ".Label", ".M", ".M2v", ".M4v", ".Mac", ".Map", ".Mask", ".Mat", ".Mdc",
-        ".Mef", ".Miff", ".Mkv", ".Mng", ".Mono", ".Mos", ".Mov", ".Mp4", ".Mpc", ".Mpeg",
+        ".Mef", ".Miff", ".Mng", ".Mono", ".Mos", ".Mpc",
         ".Mpg", ".Mpo", ".Mrw", ".Msl", ".Msvg", ".Mtv", ".Mvg", ".Nef", ".Nrw", ".Null",
         ".O", ".Ora", ".Orf", ".Otb", ".Otf", ".Pal", ".Palm", ".Pam", ".Pango", ".Pattern",
         ".Pbm", ".Pcd", ".Pcds", ".Pcl", ".Pct", ".Pcx", ".Pdb", ".Pdf", ".Pdfa", ".Pef",

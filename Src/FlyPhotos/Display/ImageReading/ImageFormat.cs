@@ -9,7 +9,7 @@ namespace FlyPhotos.Display.ImageReading;
 /// The formats that get their own decoder chain. Everything else (JPEG, BMP, RAW, the WIC/Magick long tail)
 /// shares the generic chain, which is picked by extension.
 /// </summary>
-internal enum ImageFormat { Other, Jpeg, Png, Gif, Webp, Bmp, Tiff, Ico, Heif, Avif, Psd, Svg, Dds, Pdf }
+internal enum ImageFormat { Other, Jpeg, Png, Gif, Webp, Bmp, Tiff, Ico, Heif, Avif, Psd, Svg, Dds, Pdf, Video }
 
 /// <summary>Maps extensions and file headers to <see cref="ImageFormat"/>. Pure: no I/O.</summary>
 internal static class ImageFormats
@@ -32,6 +32,11 @@ internal static class ImageFormats
         [".pdf"] = ImageFormat.Pdf
     };
 
+    static ImageFormats()
+    {
+        foreach (var ext in VideoFormats.Extensions) ByExtension[ext] = ImageFormat.Video;
+    }
+
     /// <summary>The format an extension names; <see cref="ImageFormat.Other"/> when it has no chain of its own.</summary>
     public static ImageFormat FromExtension(string extension) =>
         ByExtension.TryGetValue(extension, out var format) ? format : ImageFormat.Other;
@@ -52,6 +57,7 @@ internal static class ImageFormats
         ImageFormat.Svg => ".svg",
         ImageFormat.Dds => ".dds",
         ImageFormat.Pdf => ".pdf",
+        ImageFormat.Video => ".mp4",
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Other has no single extension")
     };
 

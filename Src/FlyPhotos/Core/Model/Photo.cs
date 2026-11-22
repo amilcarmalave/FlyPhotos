@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using FlyPhotos.Display.ImageReading;
 using FlyPhotos.Services;
 
 namespace FlyPhotos.Core.Model;
@@ -25,6 +26,9 @@ internal sealed class Photo
     /// <summary>An SVG: drawn as vectors, and has no pixel size to show in the filename bar.</summary>
     public bool IsVector { get; }
 
+    /// <summary>A video file: played by libmpv instead of decoded to a bitmap.</summary>
+    public bool IsVideo { get; }
+
     /// <summary>A camera RAW file: its HQ is reloaded when the RAW decode settings change.</summary>
     public bool IsRaw { get; }
 
@@ -35,6 +39,7 @@ internal sealed class Photo
         string extension = Path.GetExtension(FilePath);
         SupportsTransparency = !string.IsNullOrEmpty(extension) && FormatsSupportingTransparency.Contains(extension);
         IsVector = extension.Contains(".svg", StringComparison.OrdinalIgnoreCase);
+        IsVideo = VideoFormats.IsVideoExtension(extension);
         IsRaw = !string.IsNullOrEmpty(extension) && CodecDiscovery.Support.Raw(extension);
     }
 
