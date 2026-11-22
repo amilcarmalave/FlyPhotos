@@ -242,13 +242,15 @@ internal static class VideoFrameReader
     }
 
     /// <summary>
-    /// The rotation left for the canvas. mpv may already have turned the frame (it rotates in a filter for outputs
-    /// that can't): a quarter turn whose screenshot already has the video's sides swapped is not applied twice.
+    /// The rotation left for the canvas. With vo=null mpv rotates in a filter, so its screenshot is already upright
+    /// (seen on GoPro clips tagged 180°, which came out upside down when turned again). Only a quarter turn whose
+    /// screenshot still has the video's own, unswapped sides is left for the canvas; 180° can't be told apart by size
+    /// and is trusted to mpv.
     /// </summary>
     private static int StillToRotate(int rotation, int videoWidth, int videoHeight, int frameWidth, int frameHeight) =>
-        rotation is 90 or 270 && videoWidth != videoHeight && (frameWidth, frameHeight) == (videoHeight, videoWidth)
-            ? 0
-            : rotation;
+        rotation is 90 or 270 && videoWidth != videoHeight && (frameWidth, frameHeight) == (videoWidth, videoHeight)
+            ? rotation
+            : 0;
 
     /// <summary>mpv's clockwise degrees as one of 0, 90, 180, 270, the angles the canvas draws.</summary>
     private static int NormaliseRotation(int degrees) => (((degrees % 360) + 360) % 360 + 45) / 90 % 4 * 90;

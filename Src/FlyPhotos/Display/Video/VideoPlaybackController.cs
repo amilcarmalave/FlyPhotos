@@ -295,6 +295,10 @@ internal sealed partial class VideoPlaybackController : IDisposable
                 ["input-cursor"] = "no",
                 ["osc"] = "no",
                 ["osd-level"] = "0",
+                // Opaque black around a letterboxed video, so the still frame drawn under the player never shows
+                // through the bars.
+                ["background"] = "color",
+                ["background-color"] = "#000000",
                 ["hwdec"] = "auto-safe",
                 // At the end mpv keeps the last frame and pauses (no END_FILE); see OnFlag. END_FILE then means
                 // the file could not be played (OnEndFile).
