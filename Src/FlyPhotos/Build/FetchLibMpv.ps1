@@ -15,42 +15,48 @@ try {
     $url = "https://github.com/amilcarmalave/FlyPhotos/releases/download/$Release/$Asset"
     $tempDir = Join-Path $env:TEMP 'FlyPhotosLibMpv'
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
-    $archive = Join-Path $tempDir $Asset
+    # A name of its own per run: two builds fetching at once must not write or delete each other's download.
+    # The asset name stays at the end so 7-Zip still sees the extension.
+    $archive = Join-Path $tempDir ([Guid]::NewGuid().ToString('N') + '-' + $Asset)
 
     # GitHub requires TLS 1.2; Windows PowerShell 5.1 may default to older protocols.
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $ProgressPreference = 'SilentlyContinue'
 
-    Write-Host "Downloading libmpv ($Platform) from $url"
-    Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
-
-    $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-    if ($actual -ne $Sha256) {
-        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
-        throw "libmpv archive hash mismatch for $Asset (expected $Sha256, got $actual)"
-    }
-
-    $sevenZip = $null
-    $cmd = Get-Command '7z.exe' -ErrorAction SilentlyContinue
-    if ($cmd) { $sevenZip = $cmd.Source }
-    elseif (Test-Path -LiteralPath 'C:\Program Files\7-Zip\7z.exe') { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
-    if (-not $sevenZip) { throw '7-Zip (7z.exe) is required to unpack libmpv' }
-
-    # Extract into a scratch folder and move the DLL into OutDir only on success,
-    # so a failed or interrupted unpack can never leave a partial DLL behind.
-    $extractDir = Join-Path $tempDir ("extract-" + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
     try {
-        & $sevenZip e $archive "-o$extractDir" 'libmpv-2.dll' -y | Out-Null
-        $extracted = Join-Path $extractDir 'libmpv-2.dll'
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $extracted)) {
-            throw "Failed to extract libmpv-2.dll from $Asset (7z exit code $LASTEXITCODE)"
+        Write-Host "Downloading libmpv ($Platform) from $url"
+        Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+
+        $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+        if ($actual -ne $Sha256) {
+            throw "libmpv archive hash mismatch for $Asset (expected $Sha256, got $actual)"
         }
-        New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-        Move-Item -LiteralPath $extracted -Destination $dll -Force
+
+        $sevenZip = $null
+        $cmd = Get-Command '7z.exe' -ErrorAction SilentlyContinue
+        if ($cmd) { $sevenZip = $cmd.Source }
+        elseif (Test-Path -LiteralPath 'C:\Program Files\7-Zip\7z.exe') { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
+        if (-not $sevenZip) { throw '7-Zip (7z.exe) is required to unpack libmpv' }
+
+        # Extract into a scratch folder and move the DLL into OutDir only on success,
+        # so a failed or interrupted unpack can never leave a partial DLL behind.
+        $extractDir = Join-Path $tempDir ("extract-" + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+        try {
+            & $sevenZip e $archive "-o$extractDir" 'libmpv-2.dll' -y | Out-Null
+            $extracted = Join-Path $extractDir 'libmpv-2.dll'
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $extracted)) {
+                throw "Failed to extract libmpv-2.dll from $Asset (7z exit code $LASTEXITCODE)"
+            }
+            New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+            Move-Item -LiteralPath $extracted -Destination $dll -Force
+        }
+        finally {
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
     finally {
-        Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
     }
 }
 catch {
