@@ -1318,6 +1318,9 @@ High Quality Cubic – Schaling van de hoogste kwaliteit voor foto's.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Dempen / dempen opheffen</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Volume</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Volume {0}%</value>
   </data>

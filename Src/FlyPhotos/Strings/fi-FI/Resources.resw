@@ -1318,6 +1318,9 @@ High Quality Cubic – Korkealaatuisin skaalaus valokuville.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Mykistä / poista mykistys</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Äänenvoimakkuus</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Äänenvoimakkuus {0} %</value>
   </data>

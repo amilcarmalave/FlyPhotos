@@ -251,7 +251,7 @@ public sealed partial class PhotoDisplayWindow
             () => _photoController.Brake(),
             () => AppConfig.Settings.MouseFwdBackBehavior == MouseFwdBackBehavior.StepZoom,
             () => AppConfig.Settings.SwapMouseFwdBack);
-        _opacityFader = new OpacityFader(new FrameworkElement[] { BorderButtonPanel, D2dCanvasThumbNail, BorderTxtFileName, BorderVideoBar }, MainLayout, BottomPanel, AppConfig.Settings.AutoFade);
+        _opacityFader = new OpacityFader(new FrameworkElement[] { BorderButtonPanel, D2dCanvasThumbNail, BorderTxtFileName }, MainLayout, BottomPanel, AppConfig.Settings.AutoFade);
         _inactivityFader = new InactivityFader(BorderTxtZoom);
         _folderNameFader = new InactivityFader(BorderTxtFolderName, hideDelayMs: 1500);
         _mouseAutoHider = new MouseAutoHider(MainLayout, AppConfig.Settings.AutoHideMouse, TimeSpan.FromSeconds(1));
@@ -449,6 +449,8 @@ public sealed partial class PhotoDisplayWindow
         SliderVideoPosition.RemoveHandler(UIElement.PointerPressedEvent, _sliderPressedHandler);
         SliderVideoPosition.RemoveHandler(UIElement.PointerReleasedEvent, _sliderReleasedHandler);
         SliderVideoPosition.RemoveHandler(UIElement.PointerCaptureLostEvent, _sliderCaptureLostHandler);
+        SliderVideoVolume.ValueChanged -= SliderVideoVolume_ValueChanged;
+        AppTitlebar.SizeChanged -= AppTitlebar_SizeChanged;
         _video.Dispose();
         _canvasController.Dispose();
         _thumbNailController.Dispose();
@@ -472,8 +474,12 @@ public sealed partial class PhotoDisplayWindow
         _captionScrimFader.IsFullScreen = isFullScreen;
     }
 
-    private void WindAppearanceManager_CaptionButtonForegroundChanged(Color glyphColor) =>
+    private void WindAppearanceManager_CaptionButtonForegroundChanged(Color glyphColor)
+    {
         _captionScrimFader.GlyphColor = glyphColor;
+        // The title-bar file name (video items) sits next to the caption buttons: same colour, same legibility.
+        TxtTitleBarFileName.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(glyphColor);
+    }
 
     // Maximizes, or restores a maximized or full-screen window.
     private void ToggleMaximizeRestore()
@@ -1419,7 +1425,7 @@ public sealed partial class PhotoDisplayWindow
                 _windAppearanceManager.SetWindowBackdropTransparency(AppConfig.Settings.TransparentBackgroundIntensity);
                 break;
             case Setting.FileNameShowHide:
-                BorderTxtFileName.Visibility = AppConfig.Settings.ShowFileName ? Visibility.Visible : Visibility.Collapsed;
+                UpdateFileNameVisibility();
                 break;
             case Setting.ImageDimensionsShowHide:
                 _photoController.UpdateFileNameAndDetails();
@@ -1479,6 +1485,7 @@ public sealed partial class PhotoDisplayWindow
             ExifInfoPanel.CloseIfFileChanged(currentFilePath);
             CloseRenameFlyoutIfFileChanged(currentFilePath);
             TxtFileName.Text = fileDisplayDetails.DisplayText;
+            TxtTitleBarFileName.Text = fileDisplayDetails.DisplayText;
             Title = fileDisplayDetails.FileName;
         });
     }
@@ -1507,10 +1514,20 @@ public sealed partial class PhotoDisplayWindow
     // CanvasController marshals this event to the UI thread.
     private void CanvasController_OnOneToOneStateChanged(bool isOneToOne) => ButtonOneIsToOne.IsChecked = isOneToOne;
 
+    // Whether the photo on screen has pages (the page buttons show for it, unless the item is a video).
+    private bool _isMultiPagePhoto;
+
     // Shows the page buttons only for a multi-page photo. UI thread.
     private void CanvasController_OnMultiPagePhotoLoaded(bool isMultiPagePhoto)
     {
-        var visibilityState = isMultiPagePhoto ? Visibility.Visible : Visibility.Collapsed;
+        _isMultiPagePhoto = isMultiPagePhoto;
+        UpdatePageButtonsVisibility();
+    }
+
+    private void UpdatePageButtonsVisibility()
+    {
+        var visibilityState = _isMultiPagePhoto && !_photoController.CurrentPhotoIsVideo
+            ? Visibility.Visible : Visibility.Collapsed;
         ButtonNextPage.Visibility = visibilityState;
         ButtonPrevPage.Visibility = visibilityState;
     }
@@ -1547,6 +1564,7 @@ public sealed partial class PhotoDisplayWindow
         if (!_photoController.CurrentPhotoIsVideo) return;
         _video.ChangeVolume(delta);
         UpdateMuteGlyph();
+        UpdateVolumeSlider();
         ShowVolumeReadout();
     }
 
@@ -1569,7 +1587,7 @@ public sealed partial class PhotoDisplayWindow
             _video.TogglePause();
     }
 
-    // ---- the video bar (play/pause, position, time, mute) ----
+    // ---- the video controls in the button row (play/pause, position, time, mute, volume) ----
 
     // While the user drags (or holds) the slider: seeks are fast (keyframes) and position reports are ignored, so
     // the thumb stays under the pointer; the release seeks exactly.
@@ -1580,6 +1598,10 @@ public sealed partial class PhotoDisplayWindow
     // Shows "Volume n%" in place of the time for a moment after a volume change.
     private Microsoft.UI.Dispatching.DispatcherQueueTimer _videoVolumeTimer = null!;
     private bool _volumeReadoutShown;
+    // Set while the code moves the volume slider, so ValueChanged doesn't change the volume back.
+    private bool _volumeSliderUpdating;
+    // The strip was collapsed because a video is playing (not because of the ShowThumbnails setting).
+    private bool _stripHiddenForVideo;
     // The slider handles pointer input itself, so these are added with handledEventsToo.
     private PointerEventHandler _sliderPressedHandler = null!;
     private PointerEventHandler _sliderReleasedHandler = null!;
@@ -1600,16 +1622,95 @@ public sealed partial class PhotoDisplayWindow
         SliderVideoPosition.AddHandler(UIElement.PointerReleasedEvent, _sliderReleasedHandler, true);
         SliderVideoPosition.AddHandler(UIElement.PointerCaptureLostEvent, _sliderCaptureLostHandler, true);
         SliderVideoPosition.ValueChanged += SliderVideoPosition_ValueChanged;
+        SliderVideoVolume.ValueChanged += SliderVideoVolume_ValueChanged;
+        AppTitlebar.SizeChanged += AppTitlebar_SizeChanged;
+        TxtTitleBarFileName.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(_windAppearanceManager.CaptionButtonForeground);
         UpdateMuteGlyph();
+        UpdateVolumeSlider();
         UpdateVideoBarVisibility();
     }
 
-    // The bar shows only on a video; every item change comes through here. With nothing loaded the bar starts
-    // from zero.
+    // On a video the button row swaps the photo-only buttons (rotate, fit, 1:1, pages) for the video controls, and
+    // the file name moves from its own row to the title bar. Every item change comes through here. With nothing
+    // loaded the controls start from zero.
     private void UpdateVideoBarVisibility()
     {
-        BorderVideoBar.Visibility = _photoController.CurrentPhotoIsVideo ? Visibility.Visible : Visibility.Collapsed;
+        var isVideo = _photoController.CurrentPhotoIsVideo;
+        var photoOnly = isVideo ? Visibility.Collapsed : Visibility.Visible;
+        // Collapsing the focused button would send focus on to the next tab stop (Back, with a keyboard focus ring,
+        // and Space/Enter would then press it): hand it to the layout first, as the video's focus return does.
+        if (isVideo && Content?.XamlRoot is { } root && FocusManager.GetFocusedElement(root) is { } focused &&
+            (ReferenceEquals(focused, ButtonRotate) || ReferenceEquals(focused, ButtonScaleSet) ||
+             ReferenceEquals(focused, ButtonOneIsToOne) || ReferenceEquals(focused, ButtonPrevPage) ||
+             ReferenceEquals(focused, ButtonNextPage)))
+            MainLayout.Focus(FocusState.Programmatic);
+        PanelVideoControls.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        ButtonRotate.Visibility = photoOnly;
+        ButtonScaleSet.Visibility = photoOnly;
+        ButtonOneIsToOne.Visibility = photoOnly;
+        UpdatePageButtonsVisibility();
+        UpdateFileNameVisibility();
+        // A new item never starts with the strip hidden; it hides again once a video plays.
+        UpdateStripForVideo();
         if (_video.State.Phase == VideoPhase.Idle) ResetVideoBar();
+    }
+
+    // The file-name row on a photo, the title-bar name on a video; both only with the ShowFileName setting on.
+    private void UpdateFileNameVisibility()
+    {
+        var show = AppConfig.Settings.ShowFileName;
+        var isVideo = _photoController.CurrentPhotoIsVideo;
+        BorderTxtFileName.Visibility = show && !isVideo ? Visibility.Visible : Visibility.Collapsed;
+        TxtTitleBarFileName.Visibility = show && isVideo ? Visibility.Visible : Visibility.Collapsed;
+        UpdateTitleBarFileNameInset();
+    }
+
+    // Keeps the title-bar name clear of the caption buttons. RightInset is in physical pixels.
+    private void UpdateTitleBarFileNameInset()
+    {
+        var scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+        if (scale <= 0) scale = 1.0;
+        var right = AppWindow.TitleBar.RightInset / scale + 12;
+        TxtTitleBarFileName.Margin = new Thickness(12, 0, right, 0);
+    }
+
+    private void AppTitlebar_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTitleBarFileNameInset();
+
+    // The strip collapses while the video on screen plays, so the video gets its height (the player's window follows
+    // BottomPanel's size); it comes back on pause, end, stop or any item change. Only Visibility changes: the fade
+    // is untouched.
+    private void UpdateStripForVideo()
+    {
+        var hide = _photoController.CurrentPhotoIsVideo && _video.State.Phase == VideoPhase.Playing &&
+                   _video.State.Path == _photoController.GetFullPathCurrentFile();
+        if (hide)
+        {
+            if (_stripHiddenForVideo || D2dCanvasThumbNail.Visibility != Visibility.Visible) return;
+            _stripHiddenForVideo = true;
+            D2dCanvasThumbNail.Visibility = Visibility.Collapsed;
+        }
+        else if (_stripHiddenForVideo)
+        {
+            _stripHiddenForVideo = false;
+            // Back as the setting says, with a rebuild so it doesn't come back with a stale frame.
+            if (AppConfig.Settings.ShowThumbnails) _thumbNailController.ShowHideThumbnailBasedOnSettings();
+        }
+    }
+
+    // Shows the volume, capped at full: Shift+Up goes past 100.
+    private void UpdateVolumeSlider()
+    {
+        _volumeSliderUpdating = true;
+        try { SliderVideoVolume.Value = Math.Min(_video.Volume, SliderVideoVolume.Maximum); }
+        finally { _volumeSliderUpdating = false; }
+    }
+
+    // Dragged or clicked: the same path as the volume keys (ChangeVolume, its debounced save, the readout).
+    private void SliderVideoVolume_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_volumeSliderUpdating) return;
+        var delta = (int)Math.Round(e.NewValue) - _video.Volume;
+        if (delta != 0) VideoChangeVolume(delta);
     }
 
     private void ResetVideoBar()
@@ -1631,6 +1732,7 @@ public sealed partial class PhotoDisplayWindow
 
     private void Video_PhaseChanged(VideoPhase phase)
     {
+        UpdateStripForVideo();
         if (phase == VideoPhase.Idle)
         {
             ResetVideoBar();

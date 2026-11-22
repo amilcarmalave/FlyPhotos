@@ -1317,6 +1317,9 @@ High Quality Cubic – 사진에 가장 적합한 최고 품질의 크기 조절
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>음소거 / 음소거 해제</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>볼륨</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>볼륨 {0}%</value>
   </data>

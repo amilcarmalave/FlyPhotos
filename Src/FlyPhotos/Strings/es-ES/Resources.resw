@@ -1318,6 +1318,9 @@ High Quality Cubic – Escalado de la más alta calidad para fotos.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Silenciar / activar sonido</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Volumen</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Volumen {0}%</value>
   </data>

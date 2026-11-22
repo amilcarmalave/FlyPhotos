@@ -1318,6 +1318,9 @@ High Quality Cubic – تحجيم بأعلى جودة للصور.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>كتم / إلغاء كتم الصوت</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>مستوى الصوت</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>مستوى الصوت {0}%</value>
   </data>

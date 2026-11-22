@@ -1315,6 +1315,9 @@ High Quality Cubic – ഫോട്ടോകൾക്ക് ഏറ്റവു�
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>നിശബ്ദമാക്കുക / ശബ്ദം ഓണാക്കുക</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>ശബ്ദം</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>ശബ്ദം {0}%</value>
   </data>

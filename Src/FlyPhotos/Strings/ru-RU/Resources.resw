@@ -1318,6 +1318,9 @@ High Quality Cubic – Масштабирование наивысшего ка�
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Выключить / включить звук</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Громкость</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Громкость {0}%</value>
   </data>

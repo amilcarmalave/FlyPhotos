@@ -1317,6 +1317,9 @@ High Quality Cubic – 写真に最適な最高品質のスケーリングです
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>ミュート / ミュート解除</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>音量</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>音量 {0}%</value>
   </data>

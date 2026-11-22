@@ -1317,6 +1317,9 @@ High Quality Cubic – A legjobb minőségű méretezés fotókhoz.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Némítás / némítás feloldása</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Hangerő</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Hangerő {0}%</value>
   </data>

@@ -1318,6 +1318,9 @@ High Quality Cubic – 适合照片的最高质量缩放。</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>静音/取消静音</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>音量</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>音量 {0}%</value>
   </data>

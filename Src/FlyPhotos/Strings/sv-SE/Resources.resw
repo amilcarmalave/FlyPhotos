@@ -1318,6 +1318,9 @@ High Quality Cubic – Skalning med högsta kvalitet för foton.</value>
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Ljud av / på</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Volym</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Volym {0} %</value>
   </data>

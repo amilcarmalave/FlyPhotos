@@ -1318,6 +1318,9 @@ High Quality Cubic – Ridimensionamento della massima qualità per le foto.</va
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Disattiva / riattiva audio</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Volume</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Volume {0}%</value>
   </data>

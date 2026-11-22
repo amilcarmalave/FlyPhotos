@@ -1318,6 +1318,9 @@ High Quality Cubic – Масштабування найвищої якості 
   <data name="ButtonVideoMuteToolTip.Content" xml:space="preserve">
     <value>Вимкнути / увімкнути звук</value>
   </data>
+  <data name="SliderVideoVolumeToolTip.Content" xml:space="preserve">
+    <value>Гучність</value>
+  </data>
   <data name="VideoVolume.Text" xml:space="preserve">
     <value>Гучність {0}%</value>
   </data>

@@ -76,6 +76,25 @@
                 <ScalarTransition />
             </Rectangle.OpacityTransition>
         </Rectangle>
+        <!--
+            On a video item the file name moves up here (its own row is collapsed). Its own element rather than a child of
+            AppTitlebar, which sits under the canvas: the title bar's 28 DIP (the video's window starts below it),
+            and the right margin keeps it clear of the caption buttons (set from AppWindow.TitleBar.RightInset).
+        -->
+        <Grid
+            Height="28"
+            VerticalAlignment="Top"
+            IsHitTestVisible="False">
+            <TextBlock
+                x:Name="TxtTitleBarFileName"
+                Margin="12,0,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                FontSize="12"
+                TextTrimming="CharacterEllipsis"
+                TextWrapping="NoWrap"
+                Visibility="Collapsed" />
+        </Grid>
         <Border
             x:Name="BorderTxtZoom"
             Padding="10,5,10,5"
@@ -182,74 +201,6 @@
                     VerticalAlignment="Center"
                     FontSize="12"
                     Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-            </Border>
-            <!--
-                Shown only while the item on screen is a video. No control here takes keyboard focus
-                (AllowFocusOnInteraction/IsTabStop off): a focused Slider would eat Left/Right, which navigate.
-            -->
-            <Border
-                x:Name="BorderVideoBar"
-                Padding="5"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Bottom"
-                Background="{ThemeResource ButtonPanelBackgroundBrush}"
-                CornerRadius="5"
-                Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button
-                        x:Name="ButtonVideoPlayPause"
-                        Width="Auto"
-                        AllowFocusOnInteraction="False"
-                        Click="ButtonVideoPlayPause_OnClick"
-                        Content="&#xE768;"
-                        FontFamily="{StaticResource FluentIcons}"
-                        FontSize="16"
-                        IsTabStop="False">
-                        <ToolTipService.ToolTip>
-                            <ToolTip
-                                x:Uid="ButtonVideoPlayPauseToolTip"
-                                AutomationProperties.FullDescription="Non-occluding tooltip"
-                                Content="Play / pause (Space)"
-                                Placement="Top" />
-                        </ToolTipService.ToolTip>
-                    </Button>
-                    <Slider
-                        x:Name="SliderVideoPosition"
-                        Width="360"
-                        VerticalAlignment="Center"
-                        AllowFocusOnInteraction="False"
-                        IsTabStop="False"
-                        IsEnabled="False"
-                        IsThumbToolTipEnabled="False"
-                        Maximum="1"
-                        Minimum="0"
-                        StepFrequency="0.01" />
-                    <TextBlock
-                        x:Name="TxtVideoTime"
-                        MinWidth="90"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                        Text="0:00 / 0:00"
-                        TextAlignment="Center" />
-                    <Button
-                        x:Name="ButtonVideoMute"
-                        Width="Auto"
-                        AllowFocusOnInteraction="False"
-                        Click="ButtonVideoMute_OnClick"
-                        Content="&#xE995;"
-                        FontFamily="{StaticResource FluentIcons}"
-                        FontSize="16"
-                        IsTabStop="False">
-                        <ToolTipService.ToolTip>
-                            <ToolTip
-                                x:Uid="ButtonVideoMuteToolTip"
-                                AutomationProperties.FullDescription="Non-occluding tooltip"
-                                Content="Mute / unmute"
-                                Placement="Top" />
-                        </ToolTipService.ToolTip>
-                    </Button>
-                </StackPanel>
             </Border>
             <Border
                 x:Name="BorderButtonPanel"
@@ -359,6 +310,90 @@
                                 Placement="Right" />
                         </ToolTipService.ToolTip>
                     </RepeatButton>
+                    <!--
+                        The video controls, shown in place of the photo-only buttons while the item on screen is a video.
+                        No control here takes keyboard focus (AllowFocusOnInteraction/IsTabStop off): a focused Slider
+                        would eat Left/Right, which navigate.
+                    -->
+                    <StackPanel
+                        x:Name="PanelVideoControls"
+                        Margin="6,0,6,0"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        Visibility="Collapsed">
+                        <Button
+                            x:Name="ButtonVideoPlayPause"
+                            Width="Auto"
+                            AllowFocusOnInteraction="False"
+                            Click="ButtonVideoPlayPause_OnClick"
+                            Content="&#xE768;"
+                            FontFamily="{StaticResource FluentIcons}"
+                            FontSize="16"
+                            IsTabStop="False">
+                            <ToolTipService.ToolTip>
+                                <ToolTip
+                                    x:Uid="ButtonVideoPlayPauseToolTip"
+                                    AutomationProperties.FullDescription="Non-occluding tooltip"
+                                    Content="Play / pause (Space)"
+                                    Placement="Top" />
+                            </ToolTipService.ToolTip>
+                        </Button>
+                        <Slider
+                            x:Name="SliderVideoPosition"
+                            Width="360"
+                            VerticalAlignment="Center"
+                            AllowFocusOnInteraction="False"
+                            IsEnabled="False"
+                            IsTabStop="False"
+                            IsThumbToolTipEnabled="False"
+                            Maximum="1"
+                            Minimum="0"
+                            StepFrequency="0.01" />
+                        <TextBlock
+                            x:Name="TxtVideoTime"
+                            MinWidth="90"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Text="0:00 / 0:00"
+                            TextAlignment="Center" />
+                        <Button
+                            x:Name="ButtonVideoMute"
+                            Width="Auto"
+                            AllowFocusOnInteraction="False"
+                            Click="ButtonVideoMute_OnClick"
+                            Content="&#xE995;"
+                            FontFamily="{StaticResource FluentIcons}"
+                            FontSize="16"
+                            IsTabStop="False">
+                            <ToolTipService.ToolTip>
+                                <ToolTip
+                                    x:Uid="ButtonVideoMuteToolTip"
+                                    AutomationProperties.FullDescription="Non-occluding tooltip"
+                                    Content="Mute / unmute"
+                                    Placement="Top" />
+                            </ToolTipService.ToolTip>
+                        </Button>
+                        <!--  0–100; volumes above 100 (Shift+Up goes to 130) show as full.  -->
+                        <Slider
+                            x:Name="SliderVideoVolume"
+                            Width="80"
+                            VerticalAlignment="Center"
+                            AllowFocusOnInteraction="False"
+                            IsTabStop="False"
+                            IsThumbToolTipEnabled="False"
+                            Maximum="100"
+                            Minimum="0"
+                            StepFrequency="1">
+                            <ToolTipService.ToolTip>
+                                <ToolTip
+                                    x:Uid="SliderVideoVolumeToolTip"
+                                    AutomationProperties.FullDescription="Non-occluding tooltip"
+                                    Content="Volume"
+                                    Placement="Top" />
+                            </ToolTipService.ToolTip>
+                        </Slider>
+                    </StackPanel>
                     <RepeatButton
                         x:Name="ButtonNext"
                         Width="Auto"
