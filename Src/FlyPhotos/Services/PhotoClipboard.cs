@@ -46,7 +46,8 @@ internal static class PhotoClipboard
             // Leased for the copy: the cache may release the item meanwhile (window move, RAW setting change).
             var item = level == DisplayLevel.PlaceHolder ? null : photo.Slots.Get(level);
             if (item != null && !item.TryAcquire()) item = null;
-            // Vector items have no bitmap of their own: draw one. A PDF draws the page on screen.
+            // Vector items have no bitmap of their own: draw one. A PDF draws the page on screen. A video, like a
+            // PDF, is copied as its file (above); paste-as-image gets its still frame, the item's own bitmap.
             var drawnBitmap = item switch
             {
                 SvgHqDisplayItem svg => TryRasterize(svg),

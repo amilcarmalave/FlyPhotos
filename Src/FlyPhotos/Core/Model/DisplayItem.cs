@@ -188,6 +188,21 @@ internal sealed partial class PdfHqDisplayItem(CanvasDevice device, Origin origi
         PdfReader.RenderPage(Device, path, Math.Clamp(pageIndex, 0, PageCount - 1), 2.0, ClipboardMaxDimension);
 }
 
+/// <summary>A video's length and its frame's pixel size, as read by <see cref="VideoFrameReader"/>.</summary>
+internal sealed record VideoInfo(double DurationSeconds, int Width, int Height);
+
+/// <summary>
+/// A video. <see cref="DisplayItem.Bitmap"/> is one still frame at full size (see <see cref="VideoFrameReader.FrameTime"/>),
+/// drawn like any static image until playback is asked for.
+/// </summary>
+/// <param name="rotation">The video's rotation (mpv's <c>video-params/rotate</c>) when the frame was not already turned.</param>
+internal sealed partial class VideoHqDisplayItem(CanvasBitmap frame, Origin origin, VideoInfo info, int rotation = 0)
+    : HqDisplayItem(frame, origin, rotation)
+{
+    /// <summary>The video's duration and frame size.</summary>
+    public VideoInfo Info { get; } = info;
+}
+
 /// <summary>
 /// A multi-page image (multi-page TIFF, multi-frame ICO). <see cref="DisplayItem.Bitmap"/> is the first page; the
 /// renderer decodes other pages from the file bytes as the user pages through.

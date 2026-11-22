@@ -45,7 +45,8 @@ internal enum DecodeStep
     PsdEmbedded, SvgHq, SvgResized, PdfHq, PdfResized,
     Gif, Webp, Png, Tiff, IcoHq, IcoPreview,
     Rawler,
-    LargeHeif, LargeWic, LargeMagick
+    LargeHeif, LargeWic, LargeMagick,
+    VideoFrameResized, VideoFrameHq
 }
 
 /// <summary>The user settings that change which decoders are tried.</summary>
@@ -133,6 +134,14 @@ internal static class DecoderChains
 
         switch (purpose, format)
         {
+            // Video is mpv only: one still frame, at most 800 px for every preview (the first photo's too), at full
+            // size for HQ. No other codec is tried (WIC and ImageMagick claim some containers and would fail slowly).
+            case (Purpose.Preview or Purpose.PreviewLight or Purpose.PreviewHeavy or Purpose.FirstPreview,
+                ImageFormat.Video):
+                Add(DecodeStep.VideoFrameResized);
+                break;
+            // The frame is at most the video's size: never oversized.
+            case (Purpose.Large, ImageFormat.Video): break;
             // PSD's embedded preview is used even with open-exit-zoom: its full decode is the slow Magick one.
             case (Purpose.FirstPreview, ImageFormat.Psd):
                 Add(DecodeStep.PsdEmbedded);
@@ -222,6 +231,7 @@ internal static class DecoderChains
                 case ImageFormat.Dds: Add(DecodeStep.DdsHq); break;
                 case ImageFormat.Svg: Add(DecodeStep.SvgHq); break;
                 case ImageFormat.Pdf: Add(DecodeStep.PdfHq); break;
+                case ImageFormat.Video: Add(DecodeStep.VideoFrameHq); break;
                 case ImageFormat.Gif: Add(DecodeStep.Gif); break;
                 case ImageFormat.Webp: Add(DecodeStep.Webp); break;
                 case ImageFormat.Png: Add(DecodeStep.Png); break;

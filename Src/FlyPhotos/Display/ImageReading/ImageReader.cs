@@ -218,7 +218,8 @@ internal static class ImageReader
         DecodeStep.MagickHq or DecodeStep.MagickRawHq or DecodeStep.MagickResized or DecodeStep.MagickRawEmbedded or
         DecodeStep.PsdEmbedded or DecodeStep.SvgHq or DecodeStep.SvgResized or DecodeStep.PdfHq or
         DecodeStep.PdfResized or DecodeStep.Rawler or
-        DecodeStep.LargeHeif or DecodeStep.LargeMagick;
+        DecodeStep.LargeHeif or DecodeStep.LargeMagick or
+        DecodeStep.VideoFrameResized or DecodeStep.VideoFrameHq;
 
     /// <summary>Runs one reader; null when it couldn't read the file.</summary>
     internal static async Task<DisplayItem?> Run(DecodeStep step, ICanvasResourceCreatorWithDpi ctrl, ImageFile file,
@@ -255,6 +256,8 @@ internal static class ImageReader
             DecodeStep.LargeHeif => LargeImageReader.DecodeHeif(ctrl, file.Path, ct),
             DecodeStep.LargeWic => await LargeImageReader.DecodeWic(ctrl, file, ct),
             DecodeStep.LargeMagick => LargeImageReader.DecodeMagick(ctrl, file.Path, ct),
+            DecodeStep.VideoFrameResized => ItemOrNull(await VideoFrameReader.GetResized(ctrl, file.Path, ct)),
+            DecodeStep.VideoFrameHq => ItemOrNull(await VideoFrameReader.GetHq(ctrl, file.Path, ct)),
             _ => throw new ArgumentOutOfRangeException(nameof(step), step, null)
         };
 
