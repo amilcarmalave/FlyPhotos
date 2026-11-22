@@ -250,7 +250,10 @@ public sealed partial class PhotoDisplayWindow
         _ctrlDragWindowMover.IsOnBackground = pos => !_canvasController.IsPressedOnImage(pos.AdjustForDpi(D2dCanvas));
         _windFullScreenManager.FullScreenToggled += WindFullScreenManager_FullScreenToggled;
         InitCommands();
+        _videoSpike = Display.Video.VideoSpike.TryAttach(this, D2dCanvas, BottomPanel); // SPIKE
     }
+
+    private Display.Video.VideoSpike _videoSpike; // SPIKE
 
     // Wraps a synchronous action as a command.
     private static Func<Task> Act(Action a) => () =>
