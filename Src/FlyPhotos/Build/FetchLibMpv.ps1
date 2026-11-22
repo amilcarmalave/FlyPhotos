@@ -36,10 +36,21 @@ try {
     elseif (Test-Path -LiteralPath 'C:\Program Files\7-Zip\7z.exe') { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
     if (-not $sevenZip) { throw '7-Zip (7z.exe) is required to unpack libmpv' }
 
-    New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-    & $sevenZip e $archive "-o$OutDir" 'libmpv-2.dll' -y | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $dll)) {
-        throw "Failed to extract libmpv-2.dll from $Asset (7z exit code $LASTEXITCODE)"
+    # Extract into a scratch folder and move the DLL into OutDir only on success,
+    # so a failed or interrupted unpack can never leave a partial DLL behind.
+    $extractDir = Join-Path $tempDir ("extract-" + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+    try {
+        & $sevenZip e $archive "-o$extractDir" 'libmpv-2.dll' -y | Out-Null
+        $extracted = Join-Path $extractDir 'libmpv-2.dll'
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $extracted)) {
+            throw "Failed to extract libmpv-2.dll from $Asset (7z exit code $LASTEXITCODE)"
+        }
+        New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+        Move-Item -LiteralPath $extracted -Destination $dll -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 catch {
