@@ -9,6 +9,7 @@ using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Brushes;
 using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
+using Microsoft.UI;
 using Windows.UI;
 
 namespace FlyPhotos.Display.ImageRendering;
@@ -47,10 +48,21 @@ internal sealed partial class VideoStillRenderer : IRenderer
 
     public CanvasImageBrush CheckeredBrush { set => _still.CheckeredBrush = value; }
 
-    /// <summary>W2D thread. The still, then the glyph with an identity transform in DIP units.</summary>
+    /// <summary>
+    /// True while the player window covers the canvas (set on the UI thread, read on the W2D thread). The still is not
+    /// drawn then: it showed through around the playing video.
+    /// </summary>
+    public volatile bool Covered;
+
+    /// <summary>W2D thread. The still, then the glyph with an identity transform in DIP units; black while covered.</summary>
     public void Draw(CanvasDrawingSession session, CanvasViewState viewState, CanvasImageInterpolation quality,
         bool isAnimating)
     {
+        if (Covered)
+        {
+            session.Clear(Colors.Black);
+            return;
+        }
         _still.Draw(session, viewState, quality, isAnimating);
 
         session.Units = CanvasUnits.Dips;

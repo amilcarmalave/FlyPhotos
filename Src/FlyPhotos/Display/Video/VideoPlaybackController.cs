@@ -80,6 +80,9 @@ internal sealed partial class VideoPlaybackController : IDisposable
     /// </summary>
     public event Action FocusReturned;
 
+    /// <summary>The player window was shown (true) or hidden (false) over the canvas. UI thread.</summary>
+    public event Action<bool> PlayerShownChanged;
+
     public VideoPlaybackController(Window window, FrameworkElement canvas, FrameworkElement titleBar,
         FrameworkElement bottomPanel, DispatcherQueue ui)
     {
@@ -477,7 +480,7 @@ internal sealed partial class VideoPlaybackController : IDisposable
     // Unloads the file and hides the child. The handle stays.
     private void Unload()
     {
-        if (_child != IntPtr.Zero) Win32.ShowWindow(_child, Win32.SW_HIDE);
+        SetChildShown(false);
         if (_mpv == null) return;
         try { _mpv.Command("stop"); }
         catch (Exception ex) { Logger.Warn(ex, "mpv stop failed"); }
@@ -547,8 +550,17 @@ internal sealed partial class VideoPlaybackController : IDisposable
     private void UpdateVisibility()
     {
         if (_child == IntPtr.Zero) return;
-        var show = State.Phase != VideoPhase.Idle && !State.Hidden;
-        Win32.ShowWindow(_child, show ? Win32.SW_SHOWNA : Win32.SW_HIDE);
+        SetChildShown(State.Phase != VideoPhase.Idle && !State.Hidden);
+    }
+
+    private bool _childShown;
+
+    private void SetChildShown(bool show)
+    {
+        if (_child != IntPtr.Zero) Win32.ShowWindow(_child, show ? Win32.SW_SHOWNA : Win32.SW_HIDE);
+        if (_childShown == show) return;
+        _childShown = show;
+        PlayerShownChanged?.Invoke(show);
     }
 
     private void Transition(Action change)

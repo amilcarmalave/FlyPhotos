@@ -445,6 +445,7 @@ public sealed partial class PhotoDisplayWindow
         _videoVolumeTimer.Tick -= VideoVolumeTimer_Tick;
         _video.PositionChanged -= Video_PositionChanged;
         _video.PhaseChanged -= Video_PhaseChanged;
+        _video.PlayerShownChanged -= Video_PlayerShownChanged;
         SliderVideoPosition.ValueChanged -= SliderVideoPosition_ValueChanged;
         SliderVideoPosition.RemoveHandler(UIElement.PointerPressedEvent, _sliderPressedHandler);
         SliderVideoPosition.RemoveHandler(UIElement.PointerReleasedEvent, _sliderReleasedHandler);
@@ -1613,10 +1614,14 @@ public sealed partial class PhotoDisplayWindow
     private PointerEventHandler _sliderReleasedHandler = null!;
     private PointerEventHandler _sliderCaptureLostHandler = null!;
 
+    // The still under the player showed through around the video: draw black there while the player is up.
+    private void Video_PlayerShownChanged(bool shown) => _canvasController.SetVideoCovered(shown);
+
     private void InitVideoBar()
     {
         _video.PositionChanged += Video_PositionChanged;
         _video.PhaseChanged += Video_PhaseChanged;
+        _video.PlayerShownChanged += Video_PlayerShownChanged;
         _videoVolumeTimer = DispatcherQueue.CreateTimer();
         _videoVolumeTimer.Interval = TimeSpan.FromMilliseconds(1500);
         _videoVolumeTimer.IsRepeating = false;

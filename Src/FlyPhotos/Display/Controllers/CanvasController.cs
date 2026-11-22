@@ -324,8 +324,19 @@ internal partial class CanvasController : ICanvasController
     private void HandleHqVideoDisplayItem(Photo photo, VideoHqDisplayItem videoDispItem, PhotoInstallContext ctx)
     {
         InstallRenderer(
-            new VideoStillRenderer(_d2dCanvas, videoDispItem, RequestInvalidate),
+            new VideoStillRenderer(_d2dCanvas, videoDispItem, RequestInvalidate) { Covered = _videoCovered },
             _imageSize, videoDispItem.Rotation, ctx, forceThumbNailRedraw: true);
+    }
+
+    // Whether the video player window currently covers the canvas. UI thread.
+    private bool _videoCovered;
+
+    /// <summary>UI thread. The player window was shown or hidden over the canvas: the still underneath goes black.</summary>
+    public void SetVideoCovered(bool covered)
+    {
+        _videoCovered = covered;
+        if (_currentRenderer is VideoStillRenderer still) still.Covered = covered;
+        RequestInvalidate();
     }
 
     // UI thread. A multi-page TIFF or ICO; the renderer decodes the pages from the file bytes, starting at page 0.

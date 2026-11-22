@@ -27,6 +27,7 @@ internal interface ICanvasController : IDisposable
 
     /// <summary>Whether <paramref name="canvasDip"/> is on the play glyph of the video still on screen (false for any other).</summary>
     bool IsOnPlayGlyph(Windows.Foundation.Point canvasDip);
+    void SetVideoCovered(bool covered);
 }
 
 /// <summary>The thumbnail strip, as <see cref="PhotoDisplayController"/> drives it.</summary>
